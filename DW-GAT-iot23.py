@@ -115,9 +115,6 @@ if is_unnamed(df.columns[0]):
 
 df.insert(0, 'num', range(len(df)))
 
-if 'label' not in df.columns:
-    raise KeyError("未找到列名 'label'。请确认 CSV 中的标签列名为小写 label。")
-
 before = len(df)
 df = df[~df['label'].isin(rare_labels_to_drop)].reset_index(drop=True)
 after = len(df)
