@@ -766,7 +766,7 @@ if EXPORT_EMB and len(all_embeddings) > 0:
         out["Index"] = np.array(all_indices, dtype=np.int64)
         out.to_csv(EMB_CSV_PATH, index=False)
 
-        print(f"\n[OK] Exported embeddings to: {EMB_CSV_PATH}")
+        print(f"\n Exported embeddings to: {EMB_CSV_PATH}")
 
     except Exception as e:
         print("Embedding export failed:", e)
