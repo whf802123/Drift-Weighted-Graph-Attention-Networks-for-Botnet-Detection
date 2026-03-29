@@ -614,7 +614,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             hidden_test.extend(mixed12[final_mask].detach().cpu().numpy().tolist())
             y_prob_test_all.append(probs_all[final_mask])
 
-# ==================== 6. 评估 ====================
+# Evaluation 
 y_true_test = np.array(y_true_test)
 y_pred_test = np.array(y_pred_test)
 if len(y_prob_test_all) > 0:
