@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
+# ==================== 0. 配置 ====================
 CSV_PATH         = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
 WINDOW_SIZE      = 1000    # sliding window size
 BATCH_SIZE       = 100     # batch size per update
@@ -30,7 +31,7 @@ HIDDEN_CHANNELS  = 8
 TEST_RATIO       = 0.30
 LR               = 5e-3
 WEIGHT_DECAY     = 0.0
-SEED             = None
+
 
 USE_REPLAY       = True
 
