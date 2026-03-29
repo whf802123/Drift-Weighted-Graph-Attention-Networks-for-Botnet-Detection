@@ -43,7 +43,7 @@ ENTROPY_RENORM   = False
 
 USE_DRIFT_CONTROLLER = True
 
-DRIFT_ALPHA        = 0.2
+DRIFT_ALPHA        = 0.05
 DRIFT_W_CLIP_MIN   = 0.90
 DRIFT_W_CLIP_MAX   = 1.30
 
@@ -52,22 +52,22 @@ TAU_ALPHA = 0.05
 TAU_MIN, TAU_MAX = 0.40, 0.90
 
 REPLAY0 = 0.10
-REPLAY_ALPHA = 0.15
+REPLAY_ALPHA = 0.05
 REPLAY_MIN, REPLAY_MAX = 0.02, 0.40
 
 H0 = 0.15
-H_ALPHA = 0.2
+H_ALPHA = 0.05
 H_MIN, H_MAX = 0.05, 0.85
 
-JS_BETA = 0.8
-JS_COMPRESS_K = 3.0
+JS_BETA = 0.9
+JS_COMPRESS_K = 1.0
 
 mean_js_prev = 0.0
 mean_js_pos_prev = 0.0
 
 PRIORITY_UPDATE      = False
 PRIORITY_TOP_RATIO   = 0.30
-PRIORITY_ALPHA       = 0.5
+PRIORITY_ALPHA       = 0.05
 PRIORITY_MIN_SAMPLES = 8
 
 LOG_SIGNALS = True
@@ -756,6 +756,6 @@ if EXPORT_EMB and len(all_embeddings) > 0:
         out["Label"] = np.array(all_labels, dtype=np.int32)
         out["Index"] = np.array(all_indices, dtype=np.int64)
         out.to_csv(EMB_CSV_PATH, index=False)
-        print(f"\n Exported embeddings to: {EMB_CSV_PATH}")
+        print(f"\n[OK] Exported embeddings to: {EMB_CSV_PATH}")
     except Exception as e:
         print("Output embeddings Error：", e)
