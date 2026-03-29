@@ -32,13 +32,12 @@ HIDDEN_CHANNELS  = 8
 TEST_RATIO       = 0.30
 LR               = 5e-3
 WEIGHT_DECAY     = 0.0
-SEED             = None
 
 EXPORT_EMB       = True
-EMB_CSV_PATH     = 'embeddings.csv'
+EMB_CSV_PATH     = 'all_embeddings_12d_dwgatv2_iot23.csv'
 
-DF_FRAC     = 0.05   
-MAX_WINDOWS = None   
+DF_FRAC     = 0.05   # Part
+MAX_WINDOWS = None     #
 
 USE_DRIFT_CONTROLLER = True
 
@@ -73,11 +72,6 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if torch.cuda.is_available():
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
-
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(SEED)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
 SAMPLE_FRAC = DF_FRAC
 MANUAL_MINORITY_LABELS = {'C&C', 'C&C-HeartBeat'}
