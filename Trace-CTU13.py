@@ -36,7 +36,9 @@ SLOW_EPOCHS_FIRST = 2
 SLOW_EPOCHS_INC = 1
 
 CORR_THRESHOLD = 0.1
-TEST_RATIO = 0.30
+TRAIN_RATIO      = 0.70
+VALIDATION_RATIO = 0.15
+TEST_RATIO       = 0.15
 SEED = 42
 
 # Official TRACE toy-code defaults.
@@ -80,9 +82,21 @@ id_to_label = {0: "Normal", 1: "Botnet"}
 feat_df = df[feature_cols].apply(pd.to_numeric, errors="coerce")
 all_idx = np.arange(len(df), dtype=np.int64)
 
-train_idx, test_idx = train_test_split(
-    all_idx, test_size=TEST_RATIO, stratify=labels,
-    random_state=SEED, shuffle=True
+# Stratified 70/15/15 train/validation/test split.
+train_idx, holdout_idx = train_test_split(
+    all_idx,
+    test_size=VALIDATION_RATIO + TEST_RATIO,
+    stratify=labels,
+    random_state=SEED,
+    shuffle=True,
+)
+
+val_idx, test_idx = train_test_split(
+    holdout_idx,
+    test_size=TEST_RATIO / (VALIDATION_RATIO + TEST_RATIO),
+    stratify=labels[holdout_idx],
+    random_state=SEED,
+    shuffle=True,
 )
 
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
@@ -96,11 +110,22 @@ features[train_idx] = scaler.fit_transform(
 features[test_idx] = scaler.transform(
     feat_df.iloc[test_idx].values.astype(float)
 )
+features[val_idx] = scaler.transform(
+    feat_df.iloc[val_idx].values.astype(float)
+)
 
 N = len(features)
 is_train = np.zeros(N, dtype=bool)
 is_train[train_idx] = True
-is_test = ~is_train
+is_test = np.zeros(N, dtype=bool)
+is_test[test_idx] = True
+is_val = np.zeros(N, dtype=bool)
+is_val[val_idx] = True
+print(
+    f"Data split: train={len(train_idx)} ({TRAIN_RATIO:.0%}), "
+    f"validation={len(val_idx)} ({VALIDATION_RATIO:.0%}), "
+    f"test={len(test_idx)} ({TEST_RATIO:.0%})"
+)
 NUM_CLASSES = 2
 
 print("Device:", DEVICE)
@@ -713,7 +738,7 @@ y_prob_test_all = (
     else np.empty((0, NUM_CLASSES), dtype=np.float64)
 )
 
-print("\n=== Evaluation on Random Hold-out (30%) ===")
+print("\n=== Evaluation on Random Test Split (15%) ===")
 print(f"Expected hold-out samples: {len(test_idx)}")
 print(f"Actually evaluated samples: {len(y_true_test)}")
 

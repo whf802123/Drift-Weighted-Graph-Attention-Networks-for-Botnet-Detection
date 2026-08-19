@@ -29,7 +29,10 @@ GAT_EPOCHS_INC   = 2
 ATTN_HEADS       = 4
 HIDDEN_CHANNELS  = 8
 
-TEST_RATIO       = 0.30
+TRAIN_RATIO      = 0.70
+VALIDATION_RATIO = 0.15
+TEST_RATIO       = 0.15
+SEED             = 42
 LR               = 5e-3
 WEIGHT_DECAY     = 0.0
 
@@ -170,8 +173,21 @@ feat_df = pd.concat([num_df, cat_df], axis=1)
 
 N_total = len(df)
 all_idx = np.arange(N_total)
-train_idx, test_idx = train_test_split(
-    all_idx, test_size=TEST_RATIO, stratify=labels, shuffle=True
+# Stratified 70/15/15 train/validation/test split.
+train_idx, holdout_idx = train_test_split(
+    all_idx,
+    test_size=VALIDATION_RATIO + TEST_RATIO,
+    stratify=labels,
+    random_state=SEED,
+    shuffle=True,
+)
+
+val_idx, test_idx = train_test_split(
+    holdout_idx,
+    test_size=TEST_RATIO / (VALIDATION_RATIO + TEST_RATIO),
+    stratify=labels[holdout_idx],
+    random_state=SEED,
+    shuffle=True,
 )
 
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
@@ -181,10 +197,19 @@ scaler = StandardScaler(with_mean=True, with_std=True)
 features = np.empty_like(feat_df.values, dtype=np.float64)
 features[train_idx] = scaler.fit_transform(feat_df.iloc[train_idx].values.astype(float))
 features[test_idx]  = scaler.transform(feat_df.iloc[test_idx].values.astype(float))
+features[val_idx]  = scaler.transform(feat_df.iloc[val_idx].values.astype(float))
 
 N = len(features)
 is_train = np.zeros(N, dtype=bool); is_train[train_idx] = True
-is_test  = ~is_train
+is_test = np.zeros(N, dtype=bool)
+is_test[test_idx] = True
+is_val = np.zeros(N, dtype=bool)
+is_val[val_idx] = True
+print(
+    f"Data split: train={len(train_idx)} ({TRAIN_RATIO:.0%}), "
+    f"validation={len(val_idx)} ({VALIDATION_RATIO:.0%}), "
+    f"test={len(test_idx)} ({TEST_RATIO:.0%})"
+)
 
 class WeightedGATClassifier(nn.Module):
     def __init__(self, in_channels, hidden_channels, heads, num_classes):
@@ -622,7 +647,7 @@ if len(y_prob_test_all) > 0:
 else:
     y_prob_test_all = np.empty((0, num_classes))
 
-print("\n=== Evaluation on Random Hold-out (30%) ===")
+print("\n=== Evaluation on Random Test Split (15%) ===")
 if len(y_true_test) == 0:
     print("Test set empty")
 else:
