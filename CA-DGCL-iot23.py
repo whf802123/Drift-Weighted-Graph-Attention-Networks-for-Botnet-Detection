@@ -33,7 +33,9 @@ EPOCHS_FIRST = 10
 EPOCHS_INC = 2
 
 CORR_THRESHOLD = 0.4
-TEST_RATIO = 0.30
+TRAIN_RATIO      = 0.70
+VALIDATION_RATIO = 0.15
+TEST_RATIO       = 0.15
 SEED = 42
 
 HIDDEN_DIM = 32
@@ -260,10 +262,19 @@ if feat_df.shape[1] == 0:
 N_total = len(df)
 all_idx = np.arange(N_total)
 
-train_idx, test_idx = train_test_split(
+# Stratified 70/15/15 train/validation/test split.
+train_idx, holdout_idx = train_test_split(
     all_idx,
-    test_size=TEST_RATIO,
+    test_size=VALIDATION_RATIO + TEST_RATIO,
     stratify=labels,
+    random_state=SEED,
+    shuffle=True,
+)
+
+val_idx, test_idx = train_test_split(
+    holdout_idx,
+    test_size=TEST_RATIO / (VALIDATION_RATIO + TEST_RATIO),
+    stratify=labels[holdout_idx],
     random_state=SEED,
     shuffle=True,
 )
@@ -295,6 +306,9 @@ features[train_idx] = scaler.fit_transform(
 features[test_idx] = scaler.transform(
     feat_df.iloc[test_idx].values.astype(float)
 )
+features[val_idx] = scaler.transform(
+    feat_df.iloc[val_idx].values.astype(float)
+)
 
 N = len(features)
 
@@ -304,7 +318,15 @@ is_train = np.zeros(
 )
 
 is_train[train_idx] = True
-is_test = ~is_train
+is_test = np.zeros(N, dtype=bool)
+is_test[test_idx] = True
+is_val = np.zeros(N, dtype=bool)
+is_val[val_idx] = True
+print(
+    f"Data split: train={len(train_idx)} ({TRAIN_RATIO:.0%}), "
+    f"validation={len(val_idx)} ({VALIDATION_RATIO:.0%}), "
+    f"test={len(test_idx)} ({TEST_RATIO:.0%})"
+)
 
 train_unique_ids = np.unique(
     labels[train_idx]

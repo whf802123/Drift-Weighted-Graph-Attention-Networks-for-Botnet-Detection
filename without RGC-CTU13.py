@@ -34,7 +34,9 @@ GAT_EPOCHS_INC   = 2
 ATTN_HEADS       = 4
 HIDDEN_CHANNELS  = 8
 CORR_THRESHOLD   = 0.1
-TEST_RATIO       = 0.30
+TRAIN_RATIO      = 0.70
+VALIDATION_RATIO = 0.15
+TEST_RATIO       = 0.15
 LR               = 5e-3
 WEIGHT_DECAY     = 0.0
 SEED             = 42
@@ -156,24 +158,30 @@ feat_df = df[feature_cols].apply(pd.to_numeric, errors='coerce')
 
 # ----------------------------------------------------------------
 # 时间 hold-out：
-# 前 70% = 训练期；后 30% = 未来测试期。
-# train/test 是两个连续时间区间，不做 shuffle，也不做 stratify。
+# 前 70% = 训练期；中间 15% = 验证期；最后 15% = 未来测试期。
+# train/validation/test 是三个连续时间区间，不做 shuffle，也不做 stratify。
 # ----------------------------------------------------------------
 N_total = len(df)
-if N_total < 2:
-    raise RuntimeError("数据量不足，无法进行时间顺序 train/test 划分。")
+if N_total < 3:
+    raise RuntimeError("数据量不足，无法进行时间顺序 train/validation/test 划分。")
 
-split_point = int(np.floor(N_total * (1.0 - TEST_RATIO)))
-split_point = min(max(split_point, 1), N_total - 1)
+train_end = int(np.floor(N_total * TRAIN_RATIO))
+val_end = int(np.floor(N_total * (TRAIN_RATIO + VALIDATION_RATIO)))
+train_end = min(max(train_end, 1), N_total - 2)
+val_end = min(max(val_end, train_end + 1), N_total - 1)
 
-train_idx = np.arange(0, split_point, dtype=np.int64)
-test_idx = np.arange(split_point, N_total, dtype=np.int64)
+# Keep split_point as the training boundary for the incremental trainer.
+split_point = train_end
+test_start = val_end
 
+train_idx = np.arange(0, train_end, dtype=np.int64)
+val_idx = np.arange(train_end, val_end, dtype=np.int64)
+test_idx = np.arange(test_start, N_total, dtype=np.int64)
 # 缺失值填补：只使用过去的训练期统计量。
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians).fillna(0.0)
 
-# 标准化：严格只在训练期 fit，然后 transform 未来测试期。
+# 标准化：严格只在训练期 fit，然后 transform 验证期与未来测试期。
 scaler = StandardScaler(with_mean=True, with_std=True)
 features = np.empty_like(feat_df.values, dtype=np.float64)
 features[train_idx] = scaler.fit_transform(
@@ -182,20 +190,31 @@ features[train_idx] = scaler.fit_transform(
 features[test_idx] = scaler.transform(
     feat_df.iloc[test_idx].values.astype(float)
 )
+features[val_idx] = scaler.transform(
+    feat_df.iloc[val_idx].values.astype(float)
+)
 
 N = len(features)
 
-# 保留这两个 mask 供兼容/诊断使用；现在它们是连续时间区间。
+# 保留三个 mask 供兼容/诊断使用；它们是互不重叠的连续时间区间。
 is_train = np.zeros(N, dtype=bool)
 is_train[:split_point] = True
-is_test = ~is_train
+is_test = np.zeros(N, dtype=bool)
+is_test[test_idx] = True
+is_val = np.zeros(N, dtype=bool)
+is_val[val_idx] = True
+print(
+    f"Data split: train={len(train_idx)} ({TRAIN_RATIO:.0%}), "
+    f"validation={len(val_idx)} ({VALIDATION_RATIO:.0%}), "
+    f"test={len(test_idx)} ({TEST_RATIO:.0%})"
+)
 
 train_unique_ids = np.unique(labels[train_idx])
 NUM_CLASSES = len(train_unique_ids)
 if NUM_CLASSES != 2:
     raise RuntimeError(
         "按时间顺序划分后，前 70% 训练期未同时包含 Normal 和 Botnet 两类。"
-        "请检查数据时间排序或调整 TEST_RATIO。"
+        "请检查数据时间排序或调整 TRAIN_RATIO。"
     )
 
 print("CTU13 label mapping:", id_to_label)
@@ -206,12 +225,16 @@ print(
     f"({100.0 * len(train_idx) / N_total:.2f}%)"
 )
 print(
-    f"Test : [{split_point}, {N_total}) -> {len(test_idx)} samples "
+    f"Validation: [{split_point}, {test_start}) -> {len(val_idx)} samples "
+    f"({100.0 * len(val_idx) / N_total:.2f}%)"
+)
+print(
+    f"Test : [{test_start}, {N_total}) -> {len(test_idx)} samples "
     f"({100.0 * len(test_idx) / N_total:.2f}%)"
 )
 print(f"Features: {len(feature_cols)}")
 
-# 如果有可解析时间列，打印 train/test 时间边界，便于核对不存在穿越。
+# 如果有可解析时间列，打印三个集合的时间边界，便于核对不存在穿越。
 if time_col is not None and "_time_sort_key" in df.columns:
     try:
         print(
@@ -219,7 +242,11 @@ if time_col is not None and "_time_sort_key" in df.columns:
             f"-> {df['_time_sort_key'].iloc[split_point - 1]}"
         )
         print(
-            f"Test time range : {df['_time_sort_key'].iloc[split_point]} "
+            f"Validation time range: {df['_time_sort_key'].iloc[split_point]} "
+            f"-> {df['_time_sort_key'].iloc[test_start - 1]}"
+        )
+        print(
+            f"Test time range : {df['_time_sort_key'].iloc[test_start]} "
             f"-> {df['_time_sort_key'].iloc[-1]}"
         )
     except Exception:
@@ -693,7 +720,7 @@ def sparse_entropy_loss_sum_heads(
 # 时间划分后，不再把 train/test 随机混在同一个滑动窗口中。
 # 阶段 A：只遍历前 70% 的训练期，按时间顺序执行滑动窗口增量训练。
 # 阶段 B：训练结束后冻结模型，以训练期最后一个窗口作为固定历史上下文，
-#         按时间顺序依次评估后 30% 的未来样本。
+#         跳过中间 15% 验证期，按时间顺序评估最后 15% 的未来测试样本。
 #
 # 这样可以避免随机划分版本中的隐含问题：
 # 当窗口完全进入测试期后 x_train_np 会变成空，原代码会 continue，
@@ -888,13 +915,13 @@ print(
     f"({len(eval_train_context_np)} nodes)"
 )
 print(
-    f"Testing future samples [{split_point}:{N}) in chronological order"
+    f"Testing future test samples [{test_start}:{N}) in chronological order"
 )
 
 model.eval()
 
 for start in tqdm(
-    range(split_point, N, BATCH_SIZE),
+    range(test_start, N, BATCH_SIZE),
     desc='Chronological testing'
 ):
     end = min(start + BATCH_SIZE, N)
@@ -977,7 +1004,7 @@ if len(y_prob_test_all) > 0:
 else:
     y_prob_test_all = np.empty((0, NUM_CLASSES), dtype=np.float64)
 
-print("\n=== Evaluation on Chronological Future Hold-out (30%) ===")
+print("\n=== Evaluation on Chronological Future Test Split (15%) ===")
 print(f"Expected hold-out samples: {len(test_idx)}")
 print(f"Actually evaluated samples: {len(y_true_test)}")
 
@@ -1203,4 +1230,3 @@ try:
         print("t-SNE: 测试隐藏向量过少，跳过可视化。")
 except Exception as e:
     print("t-SNE 可视化失败：", e)
-
