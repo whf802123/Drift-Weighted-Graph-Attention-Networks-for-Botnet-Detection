@@ -31,10 +31,6 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
-
-
-
-
 SWEEP_CHILD = os.environ.get("CORR_SWEEP_CHILD", "0") == "1"
 
 if not SWEEP_CHILD:
@@ -119,7 +115,6 @@ if not SWEEP_CHILD:
     print(results_df.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
     print(f"\nResults CSV saved to: {csv_out}")
 
-
     fig, ax = plt.subplots(figsize=(9.2, 6.0))
 
     metric_columns = [
@@ -161,10 +156,7 @@ if not SWEEP_CHILD:
     plt.show()
     plt.close(fig)
 
-
     sys.exit(0)
-
-
 
 CSV_PATH         = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
 WINDOW_SIZE      = 1000
@@ -173,7 +165,7 @@ GAT_EPOCHS_FIRST = 10
 GAT_EPOCHS_INC   = 2
 ATTN_HEADS       = 4
 HIDDEN_CHANNELS  = 8
-CORR_THRESHOLD   = float(os.environ.get("CORR_THRESHOLD", "0.6"))
+CORR_THRESHOLD   = float(os.environ.get("CORR_THRESHOLD", "0.1"))
 TRAIN_RATIO      = 0.70
 VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
@@ -185,10 +177,6 @@ USE_REPLAY       = True
 REPLAY_RATIO     = 0.10
 
 ENTROPY_LAMBDA   = 1e-3
-
-
-
-
 
 IRGD_ENABLED          = True
 IRGD_ON_FIRST_WINDOW  = False
@@ -203,8 +191,6 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
 print(f"\n[Run config] CORR_THRESHOLD = {CORR_THRESHOLD:.1f}")
-
-
 
 df = pd.read_csv(CSV_PATH)
 
@@ -281,8 +267,6 @@ if NUM_CLASSES != 2:
 print("CTU13 label mapping:", id_to_label)
 print(f"Samples: total={N_total}, train={len(train_idx)}, test={len(test_idx)}")
 print(f"Features: {len(feature_cols)}")
-
-
 
 def _safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     if x_np.shape[0] == 0:
@@ -418,22 +402,16 @@ if NUM_CLASSES == 2:
 else:
     w_neg = w_pos = 1.0
 
-
-
 y_true_test = []
 y_pred_test = []
 y_prob_test_all = []
 hidden_test = []
 
-
 global_idx = 0
-
 
 irgd_steps = 0
 irgd_conflicts = 0
 irgd_cosines = []
-
-
 
 def select_training_indices(
     n_nodes,
@@ -463,28 +441,23 @@ def select_training_indices(
 
     return torch.cat(used_parts, dim=0)
 
-
 def build_self_only_graph(n_nodes):
     nodes = torch.arange(n_nodes, dtype=torch.long, device=DEVICE)
     return torch.stack([nodes, nodes], dim=0)
-
 
 def _loss_on_used_nodes(logits, y_train_local, used_idx):
     if used_idx is None or used_idx.numel() == 0:
         return None
     return criterion(logits[used_idx], y_train_local[used_idx])
 
-
 def _zeros_like_param(param):
     return torch.zeros_like(param, memory_format=torch.preserve_format)
-
 
 def _materialize_grads(grads, params):
     out = []
     for g, p in zip(grads, params):
         out.append(_zeros_like_param(p) if g is None else g)
     return out
-
 
 def apply_irgd_step(
     model,
@@ -603,7 +576,6 @@ def apply_irgd_step(
         'cosine': float(cosine),
     }
 
-
 def attention_heads_node_mean_from_cached_incoming(
     ei_used,
     att_heads,
@@ -679,8 +651,6 @@ def sparse_entropy_loss_sum_heads(
 
     return norm_entropy.mean()
 
-
-
 for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     batch_feats = features[start:start + BATCH_SIZE]
     batch_labels = labels[start:start + BATCH_SIZE]
@@ -731,7 +701,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         dtype=torch.bool,
         device=DEVICE,
     )
-
 
     train_edge_index = build_train_graph(x_train_np)
 
@@ -826,9 +795,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), IRGD_GRAD_CLIP)
             optimizer.step()
 
-
-
-
     if first_window:
         eval_test_mask_full = test_mask_full
     else:
@@ -876,9 +842,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
 
     model.cached_att = None
 
-
-
-
 if IRGD_ENABLED:
     print("\n=== IRGD Training Diagnostics ===")
     print(f"IRGD update steps: {irgd_steps}")
@@ -888,8 +851,6 @@ if IRGD_ENABLED:
         print(f"Conflict steps: {irgd_conflicts} ({conflict_rate:.2f}%)")
         print(f"Mean cosine(g_self, g_rel): {mean_cos:.4f}")
         print("No-conflict steps are mathematically identical to baseline full-graph updates when IRGD_REL_WEIGHT=1.0.")
-
-
 
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
@@ -951,11 +912,8 @@ else:
         + json.dumps(sweep_metrics, ensure_ascii=False)
     )
 
-
-
     if SWEEP_CHILD:
         sys.exit(0)
-
 
     try:
         labels_order = unique_ids.tolist()
@@ -980,7 +938,6 @@ else:
         plt.close(fig_cm)
     except Exception as e:
         print("Error plotting the confusion matrix:", e)
-
 
     try:
         if NUM_CLASSES > 2:
@@ -1026,16 +983,6 @@ else:
     except Exception as e:
         print("Error computing or plotting ROC curves:", e)
 
-
-
-
-
-
-
-
-
-
-
 TSNE_MAX_PER_CLASS = 1000
 
 try:
@@ -1068,12 +1015,9 @@ try:
                     print(f"[t-SNE] Removed {removed} near-constant dimensions.")
                 x_tsne = hidden_test_np[:, useful_dims]
 
-
-
                 x_tsne = StandardScaler().fit_transform(x_tsne)
                 x_tsne = np.nan_to_num(x_tsne, nan=0.0, posinf=10.0, neginf=-10.0)
                 x_tsne = np.clip(x_tsne, -10.0, 10.0)
-
 
                 rng = np.random.default_rng(SEED)
                 selected = []
