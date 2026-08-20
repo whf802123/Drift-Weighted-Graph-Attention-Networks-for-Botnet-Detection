@@ -28,9 +28,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
-# ============================================================
-# 0. Configuration
-# ============================================================
+
+
+
 CSV_PATH = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
 
 WINDOW_SIZE = 1000
@@ -45,14 +45,14 @@ VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
 SEED = 42
 
-# TACO / official-code-aligned defaults.
+
 HIDDEN_DIM = 48
 LR = 1e-2
 WEIGHT_DECAY = 0.0
 REDUCTION_RATE = 0.50
 BUFFER_SIZE = 200
 
-# Numerical safety.
+
 EPS = 1e-12
 
 TSNE_MAX_PER_CLASS = 1000
@@ -66,9 +66,9 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
 
-# ============================================================
-# 1. CTU13 loading and preprocessing
-# ============================================================
+
+
+
 df = pd.read_csv(CSV_PATH)
 
 if "Label" not in df.columns:
@@ -96,7 +96,7 @@ id_to_label = {
     1: "Botnet",
 }
 
-# Numeric conversion.
+
 feat_df = df[feature_cols].apply(
     pd.to_numeric,
     errors="coerce",
@@ -105,8 +105,8 @@ feat_df = df[feature_cols].apply(
 N_total = len(df)
 all_idx = np.arange(N_total, dtype=np.int64)
 
-# Random stratified hold-out.
-# Stratified 70/15/15 train/validation/test split.
+
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -123,11 +123,11 @@ val_idx, test_idx = train_test_split(
     shuffle=True,
 )
 
-# Train-only missing-value statistics.
+
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians).fillna(0.0)
 
-# Train-only scaling.
+
 scaler = StandardScaler(
     with_mean=True,
     with_std=True,
@@ -182,14 +182,10 @@ print(
 )
 
 
-# ============================================================
-# 2. Pearson graph utilities
-# ============================================================
+
+
+
 def safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
-    """
-    Pairwise sample correlation.
-    Each row is one traffic-flow record.
-    """
     n = x_np.shape[0]
 
     if n == 0:
@@ -209,10 +205,6 @@ def safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
 
 
 def raw_pearson_edges(x_np: np.ndarray):
-    """
-    Returns directed symmetric edges for an undirected Pearson graph.
-    Self-loops are omitted here; GCNConv adds them internally.
-    """
     n = x_np.shape[0]
 
     if n <= 1:
@@ -279,9 +271,9 @@ def tensors_to_edge_dict(edge_index, edge_weight):
         if u == v:
             continue
 
-        # Keep the strongest representation of an already-known topology
-        # instead of repeatedly multiplying the same edge because adjacent
-        # sliding windows overlap heavily.
+
+
+
         old = out.get((u, v))
         if old is None or w > old:
             out[(u, v)] = w
@@ -289,13 +281,10 @@ def tensors_to_edge_dict(edge_index, edge_weight):
     return out
 
 
-# ============================================================
-# 3. GCN backbone
-# ============================================================
+
+
+
 class TACO_GCN(nn.Module):
-    """
-    Two-layer GCN backbone, matching the structure of the official TACO GCN.
-    """
     def __init__(
         self,
         input_dim,
@@ -351,26 +340,10 @@ class TACO_GCN(nn.Module):
         return logits
 
 
-# ============================================================
-# 4. TACO graph state
-# ============================================================
+
+
+
 class GraphState:
-    """
-    Current expanded/reduced historical graph.
-
-    x:
-      coarse-node features.
-
-    y_soft:
-      class evidence retained under coarsening.
-
-    clusters:
-      clusters[i] is the set of original CTU13 global training sample IDs
-      represented by coarse node i.
-
-    n2c:
-      original global training sample ID -> current coarse-node index.
-    """
     def __init__(
         self,
         x,
@@ -411,9 +384,6 @@ def singleton_state(
     raw_y_np,
     raw_edge_local,
 ):
-    """
-    Construct the first TACO graph, with one coarse node per raw node.
-    """
     n = len(raw_global_ids)
 
     x = torch.tensor(
@@ -467,21 +437,12 @@ def expand_and_align_state(
     current_train_y_np,
     current_raw_edges_local,
 ):
-    """
-    TACO "zoom-in" / expansion step.
-
-    - Previous coarsened graph is retained.
-    - Truly new training nodes are added as singleton coarse nodes.
-    - Shared historical nodes are aligned through prev_state.n2c.
-    - Current-window Pearson edges are mapped to current coarse nodes and
-      merged into the historical reduced topology.
-    """
     current_train_global_ids = np.asarray(
         current_train_global_ids,
         dtype=np.int64,
     )
 
-    # Clone previous graph data.
+
     x_parts = [prev_state.x]
     y_parts = [prev_state.y_soft]
     clusters = [
@@ -491,7 +452,7 @@ def expand_and_align_state(
 
     n2c = dict(prev_state.n2c)
 
-    # Add only genuinely unseen global training samples.
+
     new_local_positions = []
 
     for local_pos, gid in enumerate(current_train_global_ids):
@@ -543,13 +504,13 @@ def expand_and_align_state(
         dim=0,
     )
 
-    # Keep previous reduced topology.
+
     edge_dict = tensors_to_edge_dict(
         prev_state.edge_index,
         prev_state.edge_weight,
     )
 
-    # Align current raw topology to current coarse-node IDs.
+
     for k in range(current_raw_edges_local.shape[1]):
         lu = int(current_raw_edges_local[0, k])
         lv = int(current_raw_edges_local[1, k])
@@ -563,7 +524,7 @@ def expand_and_align_state(
         if cu == cv:
             continue
 
-        # Binary topology for each period. Existing historical edges are kept.
+
         old = edge_dict.get((cu, cv))
         if old is None or 1.0 > old:
             edge_dict[(cu, cv)] = 1.0
@@ -583,14 +544,10 @@ def expand_and_align_state(
     return state
 
 
-# ============================================================
-# 5. Fidelity-node reservoir
-# ============================================================
+
+
+
 class FidelityReservoir:
-    """
-    Official TACO uses reservoir sampling to identify fidelity-critical nodes
-    that should be discouraged from being merged by graph coarsening.
-    """
     def __init__(
         self,
         capacity,
@@ -633,9 +590,9 @@ class FidelityReservoir:
         return protected
 
 
-# ============================================================
-# 6. Node-representation-proximity coarsening
-# ============================================================
+
+
+
 def cosine_similarity_np(a, b):
     denom = (
         np.linalg.norm(a)
@@ -679,9 +636,6 @@ def unique_undirected_edges(
     edge_index,
     edge_weight,
 ):
-    """
-    Collapse symmetric directed edges to one undirected candidate edge.
-    """
     edge_map = {}
 
     if edge_index.numel() == 0:
@@ -722,16 +676,6 @@ def taco_coarsen(
     protected_nodes,
     reduction_rate,
 ):
-    """
-    TACO node-representation-proximity coarsening.
-
-    Official scoring logic:
-      normal edge:       merge priority ~ cosine similarity
-      protected endpoint: merge priority ~ cosine similarity - 100
-
-    Thus replay/fidelity nodes are not absolutely frozen, but merges involving
-    them are delayed until other high-priority merges are exhausted.
-    """
     n = state.num_nodes
 
     if n <= 2:
@@ -800,8 +744,8 @@ def taco_coarsen(
         if uf.count <= target_n:
             break
 
-    # If graph disconnection prevents reaching the requested reduction,
-    # preserve the remaining components instead of inventing nonexistent edges.
+
+
     groups_dict = {}
 
     for i in range(n):
@@ -822,7 +766,7 @@ def taco_coarsen(
         for old_id in members:
             old_to_new[old_id] = new_id
 
-    # Weighted degree for official degree-weighted cluster aggregation.
+
     degrees = np.zeros(
         n,
         dtype=np.float64,
@@ -857,7 +801,7 @@ def taco_coarsen(
     new_y_soft = []
     new_clusters = []
 
-    # Coefficient for each old node inside its new coarse cluster.
+
     coeff_by_old = np.zeros(
         n,
         dtype=np.float64,
@@ -943,8 +887,8 @@ def taco_coarsen(
         dim=0,
     )
 
-    # Coarsened topology.
-    # Approximate C A C^T directly through edge aggregation.
+
+
     new_edge_dict = {}
 
     if state.edge_index.numel() > 0:
@@ -1005,25 +949,15 @@ def taco_coarsen(
     )
 
 
-# ============================================================
-# 7. Evaluation graph
-# ============================================================
+
+
+
 def build_eval_graph(
     state: GraphState,
     current_train_global_ids,
     current_train_x_np,
     test_x_np,
 ):
-    """
-    Evaluation graph:
-      reduced/expanded train graph + current test nodes.
-
-    Current raw train -> test relations are computed with Pearson correlation
-    and then mapped through TACO's raw-node -> coarse-node alignment.
-
-    Test nodes do not send messages to training nodes and do not connect to
-    other test nodes.
-    """
     n_train_mem = state.num_nodes
     n_test = test_x_np.shape[0]
 
@@ -1054,8 +988,8 @@ def build_eval_graph(
         dtype=np.int64,
     )
 
-    # Pairwise train-test correlation can be obtained from concatenating both
-    # matrices; only the cross block is used.
+
+
     raw_eval_np = np.concatenate(
         [
             current_train_x_np,
@@ -1105,7 +1039,7 @@ def build_eval_graph(
             + int(t_local)
         )
 
-        # train -> test only.
+
         edge_dict[
             (
                 coarse_src,
@@ -1125,9 +1059,9 @@ def build_eval_graph(
     )
 
 
-# ============================================================
-# 8. Training helpers
-# ============================================================
+
+
+
 def train_one_period(
     model,
     optimizer,
@@ -1173,9 +1107,9 @@ def hidden_for_coarsening(
     )
 
 
-# ============================================================
-# 9. Streaming TACO
-# ============================================================
+
+
+
 features_window = deque(
     maxlen=WINDOW_SIZE
 )
@@ -1286,7 +1220,7 @@ for start in tqdm(
         idx_win_np
     ]
 
-    # Current raw TRAIN context.
+
     current_train_global_ids = idx_win_np[
         train_mask_full
     ]
@@ -1310,9 +1244,9 @@ for start in tqdm(
         current_train_x_np
     )
 
-    # --------------------------------------------------------
-    # 9.1 TACO zoom-in / graph expansion
-    # --------------------------------------------------------
+
+
+
     if first_window:
         state = singleton_state(
             raw_global_ids=current_train_global_ids,
@@ -1348,9 +1282,9 @@ for start in tqdm(
 
     expanded_nodes = state.num_nodes
 
-    # --------------------------------------------------------
-    # 9.2 Learn on expanded historical + new graph
-    # --------------------------------------------------------
+
+
+
     train_one_period(
         model=model,
         optimizer=optimizer,
@@ -1358,9 +1292,9 @@ for start in tqdm(
         epochs=epochs_now,
     )
 
-    # --------------------------------------------------------
-    # 9.3 Evaluate current TEST arrivals before zoom-out
-    # --------------------------------------------------------
+
+
+
     if first_window:
         eval_test_mask_full = test_mask_full
     else:
@@ -1448,9 +1382,9 @@ for start in tqdm(
             .tolist()
         )
 
-    # --------------------------------------------------------
-    # 9.4 Fidelity reservoir update
-    # --------------------------------------------------------
+
+
+
     if first_window:
         new_train_global_ids = (
             current_train_global_ids
@@ -1470,9 +1404,9 @@ for start in tqdm(
         state.n2c
     )
 
-    # --------------------------------------------------------
-    # 9.5 TACO zoom-out / representation-proximity coarsening
-    # --------------------------------------------------------
+
+
+
     hidden = hidden_for_coarsening(
         model,
         state,
@@ -1506,9 +1440,9 @@ if model is None or state is None:
     )
 
 
-# ============================================================
-# 10. Diagnostics
-# ============================================================
+
+
+
 print("\n=== TACO Diagnostics ===")
 print(f"Continual periods: {period_idx}")
 print(
@@ -1525,9 +1459,9 @@ print(
 )
 
 
-# ============================================================
-# 11. Evaluation summary
-# ============================================================
+
+
+
 y_true_test = np.asarray(
     y_true_test,
     dtype=np.int64,
@@ -1619,9 +1553,9 @@ for k in [
     )
 
 
-# ============================================================
-# 12. Confusion matrix
-# ============================================================
+
+
+
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -1663,9 +1597,9 @@ except Exception as e:
     )
 
 
-# ============================================================
-# 13. ROC
-# ============================================================
+
+
+
 try:
     if (
         NUM_CLASSES == 2
@@ -1726,9 +1660,9 @@ except Exception as e:
     )
 
 
-# ============================================================
-# 14. t-SNE
-# ============================================================
+
+
+
 try:
     hidden_np = np.asarray(
         hidden_test,

@@ -67,12 +67,12 @@ HIDDEN_DIM = 32
 LR_MODEL = 1e-3
 WD_MODEL = 0.0
 
-# GCAL-style information maximization / replay.
+
 ENTROPY_WEIGHT = 1.0
 REPLAY_WEIGHT = 0.5
 EMA_MOMENTUM = 0.90
 
-# Lightweight variational memory.
+
 SYN_RATIO = 0.05
 MEMORY_INTERVAL = 5
 MAX_MEMORY_DOMAINS = 3
@@ -84,7 +84,7 @@ KL_WEIGHT = 1e-4
 MMD_WEIGHT = 1.0
 GRAD_MATCH_WEIGHT = 1.0
 
-# Synthetic edge sparsification.
+
 SYN_EDGE_THRESHOLD = 0.60
 SYN_PROJ_DIM = 16
 
@@ -100,9 +100,9 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
 
-# ============================================================
-# 1. Dataset preprocessing
-# ============================================================
+
+
+
 
 import ipaddress
 
@@ -421,7 +421,7 @@ all_idx = np.arange(
     dtype=np.int64,
 )
 
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -545,9 +545,9 @@ print(
 
 
 
-# ============================================================
-# 2. Pearson graph construction
-# ============================================================
+
+
+
 def safe_corrcoef(x_np):
     if len(x_np) == 0:
         return np.empty((0, 0), dtype=np.float64)
@@ -589,7 +589,7 @@ def build_train_graph(x_np):
 
     src, dst = np.where(adj)
 
-    # Explicit self-loops.
+
     self_nodes = np.arange(
         n,
         dtype=np.int64,
@@ -619,19 +619,6 @@ def build_eval_graph(
     x_train_np,
     x_test_np,
 ):
-    """
-    Node order:
-      [train context, test nodes]
-
-    Allowed:
-      train -> train
-      train -> test
-      self-loop
-
-    Forbidden:
-      test -> train
-      test -> test
-    """
     n_train = len(x_train_np)
     n_test = len(x_test_np)
     n_total = n_train + n_test
@@ -652,7 +639,7 @@ def build_eval_graph(
     dst_parts = []
 
     if n_train > 0:
-        # train -> train
+
         tt = (
             np.abs(
                 corr[
@@ -680,7 +667,7 @@ def build_eval_graph(
                 d.astype(np.int64)
             )
 
-        # train -> test only
+
         s, test_col = np.where(
             np.abs(
                 corr[
@@ -741,9 +728,9 @@ def build_eval_graph(
     )
 
 
-# ============================================================
-# 3. Base GCN
-# ============================================================
+
+
+
 class GCALBackbone(nn.Module):
     def __init__(
         self,
@@ -812,22 +799,12 @@ class GCALBackbone(nn.Module):
         return logits
 
 
-# ============================================================
-# 4. GCAL losses / EMA
-# ============================================================
+
+
+
 def information_max_loss(
     logits,
 ):
-    """
-    GCAL-style information maximization.
-
-    Minimize:
-      sample entropy
-      + ENTROPY_WEIGHT * sum(p_bar * log p_bar)
-
-    The second term is negative marginal entropy and therefore encourages
-    diverse predictions across the current graph domain.
-    """
     p = torch.softmax(
         logits,
         dim=1,
@@ -910,19 +887,10 @@ def cosine_gradient_distance(
     )
 
 
-# ============================================================
-# 5. Lightweight variational memory generator
-# ============================================================
+
+
+
 class LiteMemoryGenerator(nn.Module):
-    """
-    Compact replacement for the full VGAE + PGE generation loop.
-
-    It preserves the GCAL concept:
-      real target graph -> variational node distribution -> small memory graph.
-
-    The decoder uses a learnable low-dimensional pairwise similarity instead
-    of a deep all-pairs PGE, which is much faster for repeated windows.
-    """
     def __init__(
         self,
         in_dim,
@@ -1065,14 +1033,14 @@ class LiteMemoryGenerator(nn.Module):
                 >= SYN_EDGE_THRESHOLD
             )
         else:
-            # Straight-through style hard sparsification with differentiable
-            # retained weights.
+
+
             mask = (
                 prob.detach()
                 >= SYN_EDGE_THRESHOLD
             )
 
-        # Always keep synthetic self-loops.
+
         diag = torch.arange(
             n,
             device=z.device,
@@ -1163,7 +1131,7 @@ class LiteMemoryGenerator(nn.Module):
             score
         )
 
-        # Deterministic memory uses mu.
+
         z = mu_all[
             selected
         ]
@@ -1212,14 +1180,6 @@ def fit_and_store_memory(
     x,
     edge_index,
 ):
-    """
-    One lightweight inner-loop update:
-      classifier-gradient matching
-      + embedding mean alignment (MMD)
-      + variational KL.
-
-    Then materialize a compact synthetic graph.
-    """
     for _ in range(
         MEMORY_INNER_STEPS
     ):
@@ -1288,7 +1248,7 @@ def fit_and_store_memory(
             grad_real,
         )
 
-        # Mean-embedding MMD.
+
         loss_mmd = F.mse_loss(
             syn_h.mean(
                 dim=0
@@ -1298,7 +1258,7 @@ def fit_and_store_memory(
             ),
         )
 
-        # Variational information-bottleneck term.
+
         loss_kl = -0.5 * torch.mean(
             1.0
             + logvar
@@ -1338,9 +1298,9 @@ def fit_and_store_memory(
     )
 
 
-# ============================================================
-# 6. Streaming state
-# ============================================================
+
+
+
 features_window = deque(
     maxlen=WINDOW_SIZE
 )
@@ -1372,9 +1332,9 @@ window_metrics = []
 memory_sizes = []
 
 
-# ============================================================
-# 7. Streaming training / GCAL adaptation
-# ============================================================
+
+
+
 print(
     "\n=== Streaming GCAL-Lite ==="
 )
@@ -1529,9 +1489,9 @@ for start in tqdm(
             weight_decay=WD_MEMORY,
         )
 
-        # ----------------------------------------------------
-        # Source initialization: labels are used only here.
-        # ----------------------------------------------------
+
+
+
         for _ in range(
             SOURCE_EPOCHS
         ):
@@ -1568,9 +1528,9 @@ for start in tqdm(
             )
 
     else:
-        # ----------------------------------------------------
-        # Unlabeled target adaptation.
-        # ----------------------------------------------------
+
+
+
         for _ in range(
             ADAPT_EPOCHS
         ):
@@ -1585,7 +1545,7 @@ for start in tqdm(
                 logits
             )
 
-            # Re-adapt historical synthetic memories.
+
             for memory in memory_bank:
                 (
                     mx,
@@ -1619,16 +1579,16 @@ for start in tqdm(
                 model,
             )
 
-        # GCAL loads its EMA state back after target adaptation.
+
         model.load_state_dict(
             copy.deepcopy(
                 ema_model.state_dict()
             )
         )
 
-    # --------------------------------------------------------
-    # Generate compact memory sparsely, not every overlapping window.
-    # --------------------------------------------------------
+
+
+
     should_generate_memory = (
         first_window
         or window_id % MEMORY_INTERVAL == 0
@@ -1660,9 +1620,9 @@ for start in tqdm(
             )
         )
 
-    # --------------------------------------------------------
-    # Progressive hold-out evaluation: each test node once.
-    # --------------------------------------------------------
+
+
+
     eval_test_mask = (
         test_mask_full
         if first_window
@@ -1728,9 +1688,9 @@ for start in tqdm(
             .numpy()
         )
 
-    # --------------------------------------------------------
-    # Whole-current-window diagnostics.
-    # --------------------------------------------------------
+
+
+
     if test_mask_full.any():
         x_window_test_np = x_win[
             test_mask_full
@@ -1808,9 +1768,9 @@ if model is None:
     )
 
 
-# ============================================================
-# 8. Final evaluation
-# ============================================================
+
+
+
 y_true_test = np.asarray(
     y_true_test,
     dtype=np.int64,
@@ -1928,9 +1888,9 @@ for k in [
     )
 
 
-# ============================================================
-# 9. Confusion matrix
-# ============================================================
+
+
+
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -1971,9 +1931,9 @@ except Exception as e:
     )
 
 
-# ============================================================
-# 10. ROC
-# ============================================================
+
+
+
 try:
     if (
         y_prob_test.shape[0]
@@ -2051,9 +2011,9 @@ except Exception as e:
     )
 
 
-# ============================================================
-# 11. Window-level curve
-# ============================================================
+
+
+
 if window_metrics:
     window_df = pd.DataFrame(
         window_metrics

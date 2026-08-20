@@ -78,7 +78,7 @@ feat_df = df[feature_cols].apply(
 )
 
 all_idx = np.arange(len(df), dtype=np.int64)
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -131,9 +131,9 @@ print(
 )
 
 
-# ============================================================
-# 2. Graph construction
-# ============================================================
+
+
+
 def safe_corrcoef(x_np):
     if len(x_np) == 0:
         return np.empty((0, 0), dtype=np.float64)
@@ -175,7 +175,7 @@ def build_eval_graph(x_train_np, x_test_np):
     src_parts, dst_parts = [], []
 
     if n_train > 0:
-        # train -> train
+
         tt = np.abs(corr[:n_train, :n_train]) >= CORR_THRESHOLD
         np.fill_diagonal(tt, False)
         s, d = np.where(tt)
@@ -183,7 +183,7 @@ def build_eval_graph(x_train_np, x_test_np):
             src_parts.append(s.astype(np.int64))
             dst_parts.append(d.astype(np.int64))
 
-        # train -> test only
+
         s, test_col = np.where(
             np.abs(corr[:n_train, n_train:]) >= CORR_THRESHOLD
         )
@@ -209,9 +209,9 @@ def build_eval_graph(x_train_np, x_test_np):
         edge_index,
     )
 
-# ============================================================
-# 3. Lightweight GCN backbone
-# ============================================================
+
+
+
 class LiteGCN(nn.Module):
     def __init__(self, in_dim, hidden_dim, num_classes):
         super().__init__()
@@ -235,11 +235,11 @@ class LiteGCN(nn.Module):
             return logits, h
         return logits
 
-# ============================================================
-# 4. Method-specific helpers
-# ============================================================
 
-# Lightweight LTF settings.
+
+
+
+
 LTF_MEMORY_PER_CLASS = 12
 LTF_SIM_PER_CLASS = 12
 LTF_CANDIDATE_CAP = 160
@@ -255,10 +255,6 @@ def _normalize01(v):
 
 @torch.no_grad()
 def _greedy_mean_match(emb, candidate_idx, target_mean, budget):
-    """
-    Linear-kernel MMD herding:
-    greedily keeps the selected-set mean close to the target mean.
-    """
     if candidate_idx.numel() == 0 or budget <= 0:
         return torch.empty(0, dtype=torch.long, device=DEVICE)
 
@@ -286,11 +282,6 @@ def _greedy_mean_match(emb, candidate_idx, target_mean, budget):
 
 @torch.no_grad()
 def select_ltf_subsets(model, x, edge_index, y, new_mask, window_id):
-    """
-    Fixed-label streaming adaptation of LTF:
-    - G_sub: low previous-model CE + low distribution discrepancy.
-    - G_sim: distribution-only representative set.
-    """
     model.eval()
     logits, emb = model(x, edge_index, return_embedding=True)
     per_node_ce = F.cross_entropy(logits, y, reduction="none")
@@ -305,7 +296,7 @@ def select_ltf_subsets(model, x, edge_index, y, new_mask, window_id):
         if cls_old.numel() == 0:
             continue
 
-        # Lightweight candidate partitioning/capping.
+
         if cls_old.numel() > LTF_CANDIDATE_CAP:
             chosen_np = rng.choice(
                 cls_old.detach().cpu().numpy(),
@@ -318,14 +309,14 @@ def select_ltf_subsets(model, x, edge_index, y, new_mask, window_id):
 
         target_mean = emb[cls_old].mean(dim=0)
 
-        # G_sim: distribution discrepancy only.
+
         sim_idx = _greedy_mean_match(
             emb, cls_old, target_mean, LTF_SIM_PER_CLASS
         )
         if sim_idx.numel():
             sim_parts.append(sim_idx)
 
-        # G_sub: greedy objective = alpha*CE + mean-matching discrepancy.
+
         remaining = cls_old.clone()
         selected = []
         running_sum = torch.zeros_like(target_mean)
@@ -384,7 +375,7 @@ def ltf_distribution_loss(emb, y, sub_idx, sim_idx):
         if a.numel() == 0 or b.numel() == 0:
             continue
 
-        # Linear MMD / mean alignment; target branch is stop-gradient.
+
         mu_sub = emb[a].mean(dim=0)
         mu_sim = emb[b].detach().mean(dim=0)
         loss = loss + F.mse_loss(mu_sub, mu_sim)
@@ -393,9 +384,9 @@ def ltf_distribution_loss(emb, y, sub_idx, sim_idx):
     return loss / max(used, 1)
 
 
-# ============================================================
-# 5. Streaming state
-# ============================================================
+
+
+
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
 index_window = deque(maxlen=WINDOW_SIZE)
@@ -403,7 +394,7 @@ index_window = deque(maxlen=WINDOW_SIZE)
 model = None
 optimizer = None
 
-# Match the earlier CTU13 setup: binary class weighting only.
+
 if NUM_CLASSES == 2:
     train_labels_only = labels[train_idx]
     pos_ratio = (train_labels_only == 1).mean() + 1e-8
@@ -428,9 +419,9 @@ y_prob_test = []
 window_metrics = []
 selection_sizes = []
 
-# ============================================================
-# 6. Streaming training + evaluation
-# ============================================================
+
+
+
 print("\n=== Streaming LTF-Lite ===")
 
 for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
@@ -490,7 +481,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
             weight_decay=WEIGHT_DECAY,
         )
 
-    # Method-specific selection/setup once per window.
+
 
     new_train_mask = torch.tensor(
         new_train_mask_np,
@@ -499,7 +490,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
     )
 
     if first_window:
-        # No old subset exists yet.
+
         ltf_sub_idx = torch.empty(
             0, dtype=torch.long, device=DEVICE
         )
@@ -544,9 +535,9 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
         loss.backward()
         optimizer.step()
 
-    # --------------------------------------------------------
-    # Progressive test collection: every hold-out sample once.
-    # --------------------------------------------------------
+
+
+
     eval_test_mask = (
         test_mask_full
         if first_window
@@ -572,9 +563,9 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
         y_pred_test.extend(pred_t.cpu().numpy().tolist())
         y_prob_test.append(probs_t.cpu().numpy())
 
-    # --------------------------------------------------------
-    # Whole-current-window diagnostics.
-    # --------------------------------------------------------
+
+
+
     if test_mask_full.any():
         x_wtest_np = x_win[test_mask_full]
         y_wtest_np = y_win[test_mask_full]
@@ -614,9 +605,9 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
             ),
         })
 
-# ============================================================
-# 7. Final evaluation
-# ============================================================
+
+
+
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
 y_prob_test = (
@@ -668,7 +659,7 @@ print(
     f"{np.mean(selection_sizes) if selection_sizes else 0:.2f}"
 )
 
-# Confusion matrix
+
 try:
     cm = confusion_matrix(
         y_true_test, y_pred_test, labels=ids
@@ -693,7 +684,7 @@ try:
 except Exception as e:
     print("Confusion matrix failed:", e)
 
-# Multiclass/binary ROC.
+
 try:
     if y_prob_test.shape[0] == len(y_true_test):
         if NUM_CLASSES == 2:
@@ -721,7 +712,7 @@ try:
 except Exception as e:
     print("ROC failed:", e)
 
-# Window-level curve.
+
 if window_metrics:
     wdf = pd.DataFrame(window_metrics)
     print(

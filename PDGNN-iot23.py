@@ -31,15 +31,15 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
-# ============================================================
-# 0. Configuration
-# ============================================================
+
+
+
 CSV_PATH = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\iot23_combined_new.csv'
 
 WINDOW_SIZE = 1000
 BATCH_SIZE = 100
 
-# Same update schedule used by the current IoT23 experiments.
+
 EPOCHS_FIRST = 10
 EPOCHS_INC = 2
 
@@ -49,7 +49,7 @@ VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
 SEED = 42
 
-# IoT23 sampling configuration.
+
 SAMPLE_FRAC = 0.05
 MANUAL_MINORITY_LABELS = {'C&C', 'C&C-HeartBeat'}
 
@@ -63,7 +63,7 @@ RARE_LABELS_TO_DROP = {
     'Attack',
 }
 
-# PDGNN / TEM.
+
 PDGNN_HIDDEN = 256
 PDGNN_L = 2
 LR = 5e-3
@@ -71,10 +71,10 @@ WEIGHT_DECAY = 5e-4
 MLP_DROPOUT = 0.0
 LINEAR_BIAS = False
 
-# Streaming TEM adaptation.
+
 TEM_STORE_RATIO = 0.10
 TEM_CAPACITY = 1000
-TEM_SAMPLER = "degree"   # "degree" or "exact_coverage"
+TEM_SAMPLER = "degree"
 
 TSNE_MAX_PER_CLASS = 1000
 
@@ -86,9 +86,9 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
 
-# ============================================================
-# 1. IoT23 preprocessing
-# ============================================================
+
+
+
 def is_unnamed(colname):
     return (
         colname == ''
@@ -119,11 +119,11 @@ def to_float(val):
 
 df = pd.read_csv(CSV_PATH)
 
-# Drop empty/Unnamed first column if present.
+
 if len(df.columns) > 0 and is_unnamed(df.columns[0]):
     df.drop(df.columns[0], axis=1, inplace=True)
 
-# Preserve original row id for traceability.
+
 if 'num' not in df.columns:
     df.insert(0, 'num', range(len(df)))
 
@@ -132,7 +132,7 @@ if 'label' not in df.columns:
         "未找到列名 'label'。请确认 IoT23 CSV 中标签列名为小写 label。"
     )
 
-# Drop the same rare classes as the current IoT23 setting.
+
 before = len(df)
 df = df[~df['label'].isin(RARE_LABELS_TO_DROP)].reset_index(drop=True)
 after = len(df)
@@ -141,8 +141,8 @@ print(
     f"Rows: {before} -> {after}"
 )
 
-# Keep the two manually specified minority labels intact;
-# uniformly sample 5% from all other retained classes.
+
+
 print(f"Minority (kept intact): {sorted(MANUAL_MINORITY_LABELS)}")
 print(f"Sampling {SAMPLE_FRAC * 100:.1f}% for ALL other classes ...")
 
@@ -164,7 +164,7 @@ label_counts_sampled = df['label'].astype(str).value_counts()
 print("Label counts after sampling:")
 print(label_counts_sampled.to_string())
 
-# Stratified split requires >=2 samples per class.
+
 too_small = set(
     label_counts_sampled[label_counts_sampled < 2].index.tolist()
 )
@@ -175,7 +175,7 @@ if too_small:
     )
     df = df[~df['label'].isin(too_small)].reset_index(drop=True)
 
-# Feature groups, identical in spirit to the current IoT23 RGC-GAT code.
+
 ip_cols = [
     c for c in ['id.orig_h', 'id.resp_h']
     if c in df.columns
@@ -224,7 +224,7 @@ for c in cat_cols:
         .replace({'nan': '-'})
     )
 
-# Label mapping after sampling.
+
 label_text = df['label'].astype(str).values
 unique_labels_text = pd.unique(label_text)
 label_to_id = {
@@ -240,7 +240,7 @@ labels = np.asarray(
 
 print("\nLabel mapping after sampling:", label_to_id)
 
-# Numerical + one-hot categorical features.
+
 num_df = (
     df[num_cols_raw + ip_cols].copy()
     if (num_cols_raw or ip_cols)
@@ -267,11 +267,11 @@ if feat_df.shape[1] == 0:
         "未能构建任何特征列，请检查输入 CSV。"
     )
 
-# Random stratified 70/15/15 split.
+
 N_total = len(df)
 all_idx = np.arange(N_total, dtype=np.int64)
 
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -288,11 +288,11 @@ val_idx, test_idx = train_test_split(
     shuffle=True,
 )
 
-# Train-only imputation.
+
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians).fillna(0.0)
 
-# Train-only standardization.
+
 scaler = StandardScaler(
     with_mean=True,
     with_std=True,
@@ -349,9 +349,9 @@ print(
 )
 
 
-# ============================================================
-# 2. Pearson graph construction
-# ============================================================
+
+
+
 def safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     n = x_np.shape[0]
 
@@ -374,10 +374,6 @@ def safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
 def build_train_adjacency(
     x_train_np: np.ndarray,
 ) -> np.ndarray:
-    """
-    Training graph contains only current-window TRAIN nodes.
-    Self-loops are explicitly included.
-    """
     n = x_train_np.shape[0]
 
     if n == 0:
@@ -401,21 +397,6 @@ def build_inductive_eval_adjacency(
     x_train_np: np.ndarray,
     x_test_np: np.ndarray,
 ):
-    """
-    Strict inductive evaluation graph.
-
-    Node order:
-      [training context, current test nodes]
-
-    Allowed:
-      train -> train
-      train -> test
-      self-loop
-
-    Forbidden:
-      test -> train
-      test -> test (except own self-loop)
-    """
     n_train = x_train_np.shape[0]
     n_test = x_test_np.shape[0]
     n_total = n_train + n_test
@@ -433,13 +414,13 @@ def build_inductive_eval_adjacency(
     )
 
     if n_train > 0:
-        # train -> train
+
         corr_tt = corr[:n_train, :n_train]
         adj[:n_train, :n_train] = (
             np.abs(corr_tt) >= CORR_THRESHOLD
         ).astype(np.float32)
 
-        # train -> test
+
         corr_test_train = corr[n_train:, :n_train]
         adj[n_train:, :n_train] = (
             np.abs(corr_test_train) >= CORR_THRESHOLD
@@ -453,9 +434,6 @@ def build_inductive_eval_adjacency(
 def normalized_adjacency(
     adj_np: np.ndarray,
 ) -> torch.Tensor:
-    """
-    Symmetric-style normalization.
-    """
     A = torch.tensor(
         adj_np,
         dtype=torch.float32,
@@ -471,19 +449,15 @@ def normalized_adjacency(
     return row_scale * A * col_scale
 
 
-# ============================================================
-# 3. PDGNN
-# ============================================================
+
+
+
 @torch.no_grad()
 def topology_aware_embeddings(
     x_np: np.ndarray,
     adj_np: np.ndarray,
     L: int = PDGNN_L,
 ) -> torch.Tensor:
-    """
-    PDGNN S1 topology encoder:
-        TE = A_hat^L X
-    """
     x = torch.tensor(
         x_np,
         dtype=torch.float32,
@@ -501,10 +475,6 @@ def topology_aware_embeddings(
 
 
 class PDGNNClassifier(nn.Module):
-    """
-    Two-layer f_out MLP:
-        TE -> Linear -> ReLU -> Linear -> logits
-    """
     def __init__(
         self,
         in_dim: int,
@@ -543,13 +513,10 @@ class PDGNNClassifier(nn.Module):
         return logits, h
 
 
-# ============================================================
-# 4. TEM
-# ============================================================
+
+
+
 class TEMBuffer:
-    """
-    Fixed-capacity buffer of topology-aware embeddings and labels.
-    """
     def __init__(
         self,
         capacity: int,
@@ -645,15 +612,6 @@ def select_tem_candidates(
     adj_np: np.ndarray,
     rng: np.random.Generator,
 ):
-    """
-    Coverage-aware sampling per class.
-
-    "degree":
-        use degree as coverage surrogate.
-
-    "exact_coverage":
-        explicitly estimate L-hop coverage.
-    """
     candidate_local_ids = np.asarray(
         candidate_local_ids,
         dtype=np.int64,
@@ -737,9 +695,9 @@ def select_tem_candidates(
     )
 
 
-# ============================================================
-# 5. Loss
-# ============================================================
+
+
+
 def class_balanced_ce(
     logits: torch.Tensor,
     y: torch.Tensor,
@@ -768,9 +726,9 @@ def class_balanced_ce(
     )
 
 
-# ============================================================
-# 6. Streaming training
-# ============================================================
+
+
+
 features_window = deque(
     maxlen=WINDOW_SIZE
 )
@@ -867,9 +825,9 @@ for start in tqdm(
         idx_win_np
     ]
 
-    # --------------------------------------------------------
-    # 6.1 Train graph: TRAIN nodes only
-    # --------------------------------------------------------
+
+
+
     x_train_np = x_win_np[
         train_mask_full
     ]
@@ -946,7 +904,7 @@ for start in tqdm(
             device=DEVICE,
         )
 
-        # Old TEM participates in current training.
+
         if len(tem) > 0:
             train_te = torch.cat(
                 [current_te, tem.vecs],
@@ -981,8 +939,8 @@ for start in tqdm(
             loss.backward()
             optimizer.step()
 
-        # Add current session's selected TEs only after training,
-        # so they are replayed in future sessions.
+
+
         selected_ids = select_tem_candidates(
             candidate_local_ids=current_ids,
             y_train_np=y_train_np,
@@ -1010,9 +968,9 @@ for start in tqdm(
 
     session_idx += 1
 
-    # --------------------------------------------------------
-    # 6.2 Strict inductive evaluation
-    # --------------------------------------------------------
+
+
+
     if first_window:
         eval_test_mask_full = (
             test_mask_full
@@ -1101,9 +1059,9 @@ if model is None:
     )
 
 
-# ============================================================
-# 7. Diagnostics
-# ============================================================
+
+
+
 print("\n=== PDGNN + TEM Diagnostics ===")
 print(f"Streaming sessions: {session_idx}")
 print(
@@ -1116,9 +1074,9 @@ print(
 )
 
 
-# ============================================================
-# 8. Evaluation
-# ============================================================
+
+
+
 y_true_test = np.asarray(
     y_true_test,
     dtype=np.int64,
@@ -1204,9 +1162,9 @@ for k in [
     )
 
 
-# ============================================================
-# 9. Confusion matrix
-# ============================================================
+
+
+
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -1256,9 +1214,9 @@ except Exception as e:
     )
 
 
-# ============================================================
-# 10. Multi-class ROC: One-vs-Rest
-# ============================================================
+
+
+
 try:
     if NUM_CLASSES > 2:
         y_true_bin = label_binarize(
@@ -1348,9 +1306,9 @@ except Exception as e:
     )
 
 
-# ============================================================
-# 11. t-SNE
-# ============================================================
+
+
+
 try:
     hidden_np = np.asarray(
         hidden_test,

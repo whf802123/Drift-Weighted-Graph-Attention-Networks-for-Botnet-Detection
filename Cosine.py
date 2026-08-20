@@ -17,12 +17,12 @@ from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 CSV_PATH         = r'C:\Users\whf80\Desktop\ICASSP\CTU13.csv'
-WINDOW_SIZE      = 1000  # sliding window size
-BATCH_SIZE       = 100   # batch size per update
-GAT_EPOCHS_FIRST = 10    # training epochs for the first window
-GAT_EPOCHS_INC   = 2     # incremental fine-tuning epochs
+WINDOW_SIZE      = 1000
+BATCH_SIZE       = 100
+GAT_EPOCHS_FIRST = 10
+GAT_EPOCHS_INC   = 2
 ATTN_HEADS       = 4
-HIDDEN_CHANNELS  = 8     # GCN Output dim
+HIDDEN_CHANNELS  = 8
 CORR_THRESHOLD   = 0.6
 TRAIN_RATIO      = 0.70
 VALIDATION_RATIO = 0.15
@@ -57,7 +57,7 @@ labels = df['Label'].astype(int).values
 N_total = len(df)
 
 all_idx = np.arange(N_total)
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -99,7 +99,7 @@ class WeightedGATClassifier(nn.Module):
         self.gat1 = GATConv(in_channels, hidden_channels, heads=heads)
         self.gcn2 = GCNConv(hidden_channels * heads, hidden_channels)
         self.classifier = nn.Linear(hidden_channels, num_classes)
-        self.cached_att = None  # (edge_index_used, att_heads)
+        self.cached_att = None
 
     def forward(self, x, edge_index, edge_weight):
         x1, (ei_used, att_heads) = self.gat1(
@@ -115,7 +115,7 @@ features_window = deque(maxlen=WINDOW_SIZE)
 labels_window   = deque(maxlen=WINDOW_SIZE)
 index_window    = deque(maxlen=WINDOW_SIZE)
 
-edge_weight_dict = {}  # (u,v) -> weight
+edge_weight_dict = {}
 
 model = None
 optimizer = None
@@ -174,12 +174,12 @@ def compute_loss_on_new_nodes(logits, y_win, idx_np):
     return criterion(logits[final_mask], y_win[final_mask]), final_mask
 
 def attention_heads_node_mean_from_cached_incoming(ei_used, att_heads, num_nodes, heads):
-    dst = ei_used[1]  # [E]
+    dst = ei_used[1]
     E = dst.numel()
     device = att_heads.device
 
-    in_sum = torch.zeros(num_nodes, heads, device=device)  # [N, H]
-    in_cnt = torch.zeros(num_nodes, 1, device=device)      # [N, 1]
+    in_sum = torch.zeros(num_nodes, heads, device=device)
+    in_cnt = torch.zeros(num_nodes, 1, device=device)
 
     for h in range(heads):
         in_sum[:, h].index_add_(0, dst, att_heads[:, h])
@@ -189,10 +189,10 @@ def attention_heads_node_mean_from_cached_incoming(ei_used, att_heads, num_nodes
 
     in_mean = in_sum / in_cnt.clamp(min=1.0)
     in_mean = (in_mean - in_mean.mean(dim=0, keepdim=True)) / (in_mean.std(dim=0, keepdim=True) + 1e-6)
-    return in_mean  # [N, heads]
+    return in_mean
 
 def refresh_edge_weights_from_cached_att(edge_weight_dict, ei_used, att_heads, ema=EDGE_EW_EMA):
-    att_mean_edge = att_heads.mean(dim=1).detach().cpu().numpy()  # [E]
+    att_mean_edge = att_heads.mean(dim=1).detach().cpu().numpy()
     for k, (u, v) in enumerate(ei_used.t().tolist()):
         old = edge_weight_dict.get((u, v), 1.0)
         if ema is None or ema <= 0.0:
@@ -202,14 +202,14 @@ def refresh_edge_weights_from_cached_att(edge_weight_dict, ei_used, att_heads, e
 
 def sparse_entropy_loss_sum_heads(ei_used, att_heads, num_nodes, heads, nodes_mask=None, eps=1e-12,
                                   renorm=ENTROPY_RENORM):
-    dst = ei_used[1]  # [E]
+    dst = ei_used[1]
     E = dst.numel()
     device = att_heads.device
 
     deg_in = torch.zeros(num_nodes, device=device).index_add_(0, dst, torch.ones(E, device=device))
-    logZ = torch.log(deg_in.clamp_min(1.0))  # log(deg_i)
+    logZ = torch.log(deg_in.clamp_min(1.0))
 
-    neg_p_logp_sum_heads = torch.zeros(num_nodes, device=device)  # [N]
+    neg_p_logp_sum_heads = torch.zeros(num_nodes, device=device)
     for h in range(heads):
         p = att_heads[:, h].clamp_min(eps)
         tmp = torch.zeros(num_nodes, device=device)
@@ -243,8 +243,8 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     x_tensor = torch.tensor(x_np, dtype=torch.float32, device=DEVICE)
 
     with torch.no_grad():
-        x_norm = x_tensor / (x_tensor.norm(dim=1, keepdim=True) + 1e-9)  # [W, F]
-        sim = torch.matmul(x_norm, x_norm.t())                            # [W, W]
+        x_norm = x_tensor / (x_tensor.norm(dim=1, keepdim=True) + 1e-9)
+        sim = torch.matmul(x_norm, x_norm.t())
         adj = sim.abs() >= CORR_THRESHOLD
         adj.fill_diagonal_(False)
         rows_t, cols_t = adj.nonzero(as_tuple=True)
@@ -273,7 +273,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             ei, ew = build_all_edges_and_weights()
             if ei is None:
                 continue
-            logits, _hidden = model(x_tensor, ei, ew)     # 此处已缓存注意力
+            logits, _hidden = model(x_tensor, ei, ew)
             y_win  = torch.tensor(list(labels_window), dtype=torch.long, device=DEVICE)
             idx_np = np.array(index_window)
             ce_loss, used_mask = compute_loss_on_new_nodes(logits, y_win, idx_np)
@@ -362,7 +362,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             head4 = attention_heads_node_mean_from_cached_incoming(
                 ei_used, att_heads, num_nodes=x_tensor.size(0), heads=ATTN_HEADS
             )
-            mixed12 = torch.cat([hidden8, head4], dim=1)  # [N, 12]
+            mixed12 = torch.cat([hidden8, head4], dim=1)
             model.cached_att = None
 
             if not first_window_committed:

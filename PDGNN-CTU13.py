@@ -30,7 +30,7 @@ CSV_PATH = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
 WINDOW_SIZE = 1000
 BATCH_SIZE = 100
 
-# Keep the same incremental schedule as the current CTU13 experiments.
+
 EPOCHS_FIRST = 10
 EPOCHS_INC = 1
 
@@ -40,17 +40,17 @@ VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
 SEED = 42
 
-# PDGNN paper / public implementation settings.
+
 PDGNN_HIDDEN = 256
-PDGNN_L = 2                    # paper: L=2
+PDGNN_L = 2
 LR = 5e-3
-WEIGHT_DECAY = 5e-4            # public implementation default
+WEIGHT_DECAY = 5e-4
 MLP_DROPOUT = 0.0
 LINEAR_BIAS = False
 
 TEM_STORE_RATIO = 0.50
-TEM_CAPACITY = 1000            # fixed number of topology-aware embeddings
-TEM_SAMPLER = "degree"         # "degree" (official code default) or "exact_coverage"
+TEM_CAPACITY = 1000
+TEM_SAMPLER = "degree"
 
 TSNE_MAX_PER_CLASS = 1000
 
@@ -84,7 +84,7 @@ feat_df = df[feature_cols].apply(pd.to_numeric, errors="coerce")
 N_total = len(df)
 all_idx = np.arange(N_total, dtype=np.int64)
 
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -101,11 +101,11 @@ val_idx, test_idx = train_test_split(
     shuffle=True,
 )
 
-# Train-only imputation.
+
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians).fillna(0.0)
 
-# Train-only standardization.
+
 scaler = StandardScaler(with_mean=True, with_std=True)
 features = np.empty_like(feat_df.values, dtype=np.float64)
 features[train_idx] = scaler.fit_transform(
@@ -180,7 +180,7 @@ def build_inductive_eval_adjacency(
     adj = np.zeros((n_total, n_total), dtype=np.float32)
 
     if n_train > 0:
-        # train -> train
+
         corr_tt = corr[:n_train, :n_train]
         adj[:n_train, :n_train] = (
             np.abs(corr_tt) >= CORR_THRESHOLD
@@ -251,7 +251,7 @@ class TEMBuffer:
             device=DEVICE,
         )
 
-        # Number of already processed selected candidates.
+
         self.n_seen_selected = 0
 
     def __len__(self):
@@ -271,7 +271,7 @@ class TEMBuffer:
                 self.vecs = torch.cat([self.vecs, v], dim=0)
                 self.labels = torch.cat([self.labels, y], dim=0)
             else:
-                # Reservoir replacement for bounded streaming memory.
+
                 j = int(self.rng.integers(0, self.n_seen_selected))
                 if j < self.capacity:
                     self.vecs[j] = v[0]
@@ -286,7 +286,7 @@ def exact_two_hop_coverage_counts(adj_np: np.ndarray) -> np.ndarray:
     reach_l = reach.copy()
     base = reach.astype(np.uint8)
 
-    # Boolean matrix propagation.
+
     for _ in range(1, PDGNN_L):
         reach_l = (reach_l.astype(np.uint8) @ base) > 0
 
@@ -321,8 +321,8 @@ def select_tem_candidates(
         if cls_ids.size == 0:
             continue
 
-        # Streaming adaptation of the memory budget:
-        # keep approximately 10% of new samples from each class.
+
+
         k = max(1, int(np.ceil(TEM_STORE_RATIO * cls_ids.size)))
         k = min(k, cls_ids.size)
 
@@ -341,14 +341,10 @@ def select_tem_candidates(
     return np.asarray(selected, dtype=np.int64)
 
 
-# ============================================================
-# 5. Loss
-# ============================================================
+
+
+
 def class_balanced_ce(logits: torch.Tensor, y: torch.Tensor):
-    """
-    Class-size reweighting, following the TEM public implementation:
-      weight_c = 1 / n_c
-    """
     counts = torch.bincount(y, minlength=NUM_CLASSES).float()
     weights = torch.zeros(NUM_CLASSES, dtype=torch.float32, device=DEVICE)
 
@@ -358,9 +354,9 @@ def class_balanced_ce(logits: torch.Tensor, y: torch.Tensor):
     return F.cross_entropy(logits, y, weight=weights)
 
 
-# ============================================================
-# 6. Streaming training
-# ============================================================
+
+
+
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
 index_window = deque(maxlen=WINDOW_SIZE)
@@ -372,7 +368,7 @@ tem = None
 global_idx = 0
 session_idx = 0
 
-# Test collections.
+
 y_true_test = []
 y_pred_test = []
 y_prob_test_all = []
@@ -406,7 +402,7 @@ for start in tqdm(
     y_win_np = np.asarray(labels_window, dtype=np.int64)
     idx_win_np = np.asarray(index_window, dtype=np.int64)
 
-    # New positions in the full sliding window.
+
     new_mask_full = np.zeros(len(x_win_np), dtype=bool)
     if first_window:
         new_mask_full[:] = True
@@ -416,9 +412,9 @@ for start in tqdm(
     train_mask_full = is_train[idx_win_np]
     test_mask_full = is_test[idx_win_np]
 
-    # --------------------------------------------------------
-    # 6.1 Training graph: TRAIN nodes only
-    # --------------------------------------------------------
+
+
+
     x_train_np = x_win_np[train_mask_full]
     y_train_np = y_win_np[train_mask_full]
     new_train_mask_local_np = new_mask_full[train_mask_full]
@@ -452,9 +448,9 @@ for start in tqdm(
             seed=SEED + 77,
         )
 
-    # Current session examples:
-    #   first window -> all current training nodes
-    #   later windows -> only newly arrived training nodes
+
+
+
     if first_window:
         current_ids = np.arange(len(x_train_np), dtype=np.int64)
         epochs_now = EPOCHS_FIRST
@@ -476,9 +472,9 @@ for start in tqdm(
             device=DEVICE,
         )
 
-        # IMPORTANT:
-        # Replay uses old TEM only. Newly selected TEs are added after this
-        # session's optimization and therefore benefit future sessions.
+
+
+
         if len(tem) > 0:
             train_te = torch.cat([current_te, tem.vecs], dim=0)
             train_y = torch.cat([current_y, tem.labels], dim=0)
@@ -495,7 +491,7 @@ for start in tqdm(
             loss.backward()
             optimizer.step()
 
-        # Populate TEM after learning the current session.
+
         selected_ids = select_tem_candidates(
             candidate_local_ids=current_ids,
             y_train_np=y_train_np,
@@ -518,9 +514,9 @@ for start in tqdm(
 
     session_idx += 1
 
-    # --------------------------------------------------------
-    # 6.2 Evaluation: TEST nodes never train the model
-    # --------------------------------------------------------
+
+
+
     if first_window:
         eval_test_mask_full = test_mask_full
     else:
@@ -563,9 +559,9 @@ if model is None:
     )
 
 
-# ============================================================
-# 7. Diagnostics
-# ============================================================
+
+
+
 print("\n=== PDGNN + TEM Diagnostics ===")
 print(f"Streaming sessions: {session_idx}")
 print(f"TEM current size: {len(tem)} / {TEM_CAPACITY}")
@@ -573,9 +569,9 @@ print(f"TEM selected candidates seen: {tem.n_seen_selected}")
 print("TEM stores fixed-size topology-aware embeddings, not raw ego-subgraphs.")
 
 
-# ============================================================
-# 8. Evaluation
-# ============================================================
+
+
+
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
 
@@ -632,9 +628,9 @@ for k in ["macro avg", "weighted avg"]:
     )
 
 
-# ============================================================
-# 9. Confusion matrix
-# ============================================================
+
+
+
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -662,9 +658,9 @@ except Exception as e:
     print("绘制混淆矩阵出错：", e)
 
 
-# ============================================================
-# 10. Binary ROC
-# ============================================================
+
+
+
 try:
     if (
         NUM_CLASSES == 2
@@ -692,9 +688,9 @@ except Exception as e:
     print("ROC 计算/绘制出错：", e)
 
 
-# ============================================================
-# 11. t-SNE of PDGNN hidden embeddings
-# ============================================================
+
+
+
 try:
     hidden_np = np.asarray(hidden_test, dtype=np.float64)
 
@@ -705,7 +701,7 @@ try:
         hidden_np = hidden_np[finite_mask]
         labels_tsne = labels_tsne[finite_mask]
 
-        # Stratified display-only sampling.
+
         rng = np.random.default_rng(SEED)
         selected = []
 
