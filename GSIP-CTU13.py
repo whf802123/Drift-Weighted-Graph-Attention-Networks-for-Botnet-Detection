@@ -33,10 +33,6 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-
-
-
-
 CSV_PATH = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
 
 WINDOW_SIZE = 1000
@@ -51,21 +47,14 @@ VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
 SEED = 42
 
-
 HIDDEN_DIM = 256
 LR = 5e-3
 WEIGHT_DECAY = 5e-4
 
-
-
 BUFFER_PER_CLASS = 100
 CM_DISTANCE = 0.5
 
-
 NEIBT_LL = 0.99
-
-
-
 
 NEIBT_H = 0.5
 W_LL = 50.0
@@ -73,7 +62,6 @@ W_LG = 0.05
 W_H = 10.0
 
 GSIP_TEMPERATURE = 1.0
-
 
 TSNE_MAX_PER_CLASS = 1000
 
@@ -87,10 +75,6 @@ random.seed(SEED)
 
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
-
-
-
-
 
 df = pd.read_csv(CSV_PATH)
 
@@ -232,10 +216,6 @@ print(
     f"w_ll={W_LL}, w_lg={W_LG}, w_h={W_H}"
 )
 
-
-
-
-
 def safe_row_corrcoef(
     x_np: np.ndarray,
 ) -> np.ndarray:
@@ -349,8 +329,6 @@ def build_inductive_eval_graph(
                 dst_tt.astype(np.int64)
             )
 
-
-
         corr_train_test = corr[
             :n_train,
             n_train:
@@ -399,10 +377,6 @@ def build_inductive_eval_graph(
         edge_index,
     )
 
-
-
-
-
 class GSIPGCN(nn.Module):
     def __init__(
         self,
@@ -446,10 +420,6 @@ class GSIPGCN(nn.Module):
         )
 
         return logits, hidden
-
-
-
-
 
 class ClassBalancedCMBuffer:
     def __init__(
@@ -583,10 +553,6 @@ class ClassBalancedCMBuffer:
             for x in selected_global_ids
         ]
 
-
-
-
-
 def balanced_ce(
     logits,
     y,
@@ -643,9 +609,6 @@ def gsip_losses(
         dim=2,
     )
 
-
-
-
     same_label = torch.eq(
         replay_labels.unsqueeze(1),
         replay_labels.unsqueeze(0),
@@ -678,9 +641,6 @@ def gsip_losses(
     else:
         loss_ll = zero
 
-
-
-
     if W_LG != 0.0:
         loss_lg = F.mse_loss(
             new_logits.mean(
@@ -692,9 +652,6 @@ def gsip_losses(
         )
     else:
         loss_lg = zero
-
-
-
 
     high_mask = (
         sim_old > NEIBT_H
@@ -744,10 +701,6 @@ def gsip_losses(
         loss_h,
     )
 
-
-
-
-
 features_window = deque(
     maxlen=WINDOW_SIZE
 )
@@ -770,12 +723,10 @@ replay_buffer = ClassBalancedCMBuffer(
 global_idx = 0
 session_idx = 0
 
-
 y_true_test = []
 y_pred_test = []
 y_prob_test_all = []
 hidden_test = []
-
 
 window_perf_ids = []
 window_perf_n_test = []
@@ -784,14 +735,9 @@ window_perf_precision = []
 window_perf_recall = []
 window_perf_f1 = []
 
-
 gsip_ll_values = []
 gsip_lg_values = []
 gsip_h_values = []
-
-
-
-
 
 print("\n=== Streaming GSIP Training ===")
 
@@ -1011,9 +957,6 @@ for start in tqdm(
         replay_edge_index = None
         old_replay_logits = None
 
-
-
-
     for _ in range(epochs_now):
         if used_idx is None:
             break
@@ -1122,9 +1065,6 @@ for start in tqdm(
         total_loss.backward()
         optimizer.step()
 
-
-
-
     if first_window:
         eval_test_mask_full = (
             test_mask_full
@@ -1206,9 +1146,6 @@ for start in tqdm(
             .numpy()
             .tolist()
         )
-
-
-
 
     if test_mask_full.any():
         x_curve_test_np = x_win_np[
@@ -1299,9 +1236,6 @@ for start in tqdm(
             )
         )
 
-
-
-
     if first_window:
         new_train_global_ids = (
             train_global_ids
@@ -1325,10 +1259,6 @@ if model is None:
         "The model was not initialized. Ensure WINDOW_SIZE is smaller than the number of valid samples."
     )
 
-
-
-
-
 print("\n=== GSIP Diagnostics ===")
 print(
     f"Continual sessions: "
@@ -1346,10 +1276,6 @@ if gsip_ll_values:
         f"LG={np.mean(gsip_lg_values):.6f}, "
         f"H={np.mean(gsip_h_values):.6f}"
     )
-
-
-
-
 
 if len(window_perf_ids) > 0:
     print(
@@ -1435,10 +1361,6 @@ if len(window_perf_ids) > 0:
     plt.close(
         fig_window
     )
-
-
-
-
 
 y_true_test = np.asarray(
     y_true_test,
@@ -1534,10 +1456,6 @@ for k in [
         f"f1-score: {m['f1-score'] * 100:.2f}%"
     )
 
-
-
-
-
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -1580,10 +1498,6 @@ except Exception as e:
         "Error plotting the confusion matrix:",
         e,
     )
-
-
-
-
 
 try:
     if (
@@ -1650,10 +1564,6 @@ except Exception as e:
         "Error computing or plotting ROC curves:",
         e,
     )
-
-
-
-
 
 try:
     hidden_np = np.asarray(
