@@ -25,8 +25,6 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-
-
 CSV_PATH         = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\iot23_combined_new.csv'
 WINDOW_SIZE      = 1000
 BATCH_SIZE       = 100
@@ -53,11 +51,8 @@ np.random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
-
 SAMPLE_FRAC = 0.05
 MANUAL_MINORITY_LABELS = {'C&C', 'C&C-HeartBeat'}
-
-
 
 def is_unnamed(colname):
     return (colname == '') or pd.isna(colname) or str(colname).lower().startswith('unnamed')
@@ -82,14 +77,10 @@ def to_float(val):
     except Exception:
         return np.nan
 
-
 df = pd.read_csv(CSV_PATH)
-
 
 if is_unnamed(df.columns[0]):
     df.drop(df.columns[0], axis=1, inplace=True)
-
-
 
 df.insert(0, 'num', range(len(df)))
 
@@ -127,8 +118,6 @@ df = (
 label_counts_sampled = df['label'].astype(str).value_counts()
 print("Label counts after manual-minority keep & uniform sampling:")
 print(label_counts_sampled.to_string())
-
-
 
 too_small = set(label_counts_sampled[label_counts_sampled < 2].index.tolist())
 if too_small:
@@ -200,10 +189,8 @@ val_idx, test_idx = train_test_split(
     shuffle=True,
 )
 
-
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians)
-
 
 scaler = StandardScaler(with_mean=True, with_std=True)
 features = np.empty_like(feat_df.values, dtype=np.float64)
@@ -229,8 +216,6 @@ train_unique_ids = np.unique(labels[train_idx])
 NUM_CLASSES = len(train_unique_ids)
 if NUM_CLASSES != len(np.unique(labels)):
     raise RuntimeError("The training set does not contain all classes; the current multiclass configuration cannot be used.")
-
-
 
 def _safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     if x_np.shape[0] == 0:
@@ -347,8 +332,6 @@ class WeightedGATClassifier(nn.Module):
         logits = self.classifier(x2)
         return logits, x2
 
-
-
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
 index_window = deque(maxlen=WINDOW_SIZE)
@@ -356,7 +339,6 @@ index_window = deque(maxlen=WINDOW_SIZE)
 model = None
 optimizer = None
 criterion = None
-
 
 if NUM_CLASSES == 2:
     train_labels_only = labels[train_idx]
@@ -366,8 +348,6 @@ if NUM_CLASSES == 2:
 else:
     w_neg = w_pos = 1.0
 
-
-
 y_true_test = []
 y_pred_test = []
 y_prob_test_all = []
@@ -375,8 +355,6 @@ hidden_test = []
 
 
 global_idx = 0
-
-
 
 def compute_training_loss(
     logits,
@@ -488,8 +466,6 @@ def sparse_entropy_loss_sum_heads(
 
     return norm_entropy.mean()
 
-
-
 for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     batch_feats = features[start:start + BATCH_SIZE]
     batch_labels = labels[start:start + BATCH_SIZE]
@@ -541,7 +517,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         device=DEVICE,
     )
 
-
     train_edge_index = build_train_graph(x_train_np)
 
     if model is None:
@@ -572,8 +547,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     else:
         epochs_now = GAT_EPOCHS_INC
 
-
-
     for _ in range(epochs_now):
         model.train()
         logits_train, _hidden_train = model(x_train_tensor, train_edge_index)
@@ -586,17 +559,12 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         )
         if ce_loss is None:
             continue
-
-
-
+            
         loss = ce_loss
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
-
-
 
     if first_window:
         eval_test_mask_full = test_mask_full
@@ -606,8 +574,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     if eval_test_mask_full.any():
         x_new_test_np = x_win_np[eval_test_mask_full]
         y_new_test_np = y_win_np[eval_test_mask_full]
-
-
 
         x_eval_tensor, eval_edge_index = build_inductive_eval_graph(
             x_train_np,
@@ -644,8 +610,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             hidden_test.extend(mixed12_test.cpu().numpy().tolist())
 
     model.cached_att = None
-
-
 
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
@@ -693,7 +657,6 @@ else:
             f"f1-score: {m['f1-score'] * 100:.2f}%"
         )
 
-
     try:
         labels_order = unique_ids.tolist()
         display_names = [id_to_label[i] for i in labels_order]
@@ -714,7 +677,6 @@ else:
         plt.show()
     except Exception as e:
         print("Error plotting the confusion matrix:", e)
-
 
     try:
         if NUM_CLASSES > 2:
@@ -759,8 +721,6 @@ else:
             print("[ROC] The current task is binary; skipping multiclass ROC curves.")
     except Exception as e:
         print("Error computing or plotting ROC curves:", e)
-
-
 
 try:
     if len(hidden_test) > 10:
