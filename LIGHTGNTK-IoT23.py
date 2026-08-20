@@ -236,10 +236,6 @@ print(
     f"features={features.shape[1]}"
 )
 
-
-
-
-
 def safe_corrcoef(x_np):
     if len(x_np) == 0:
         return np.empty((0, 0), dtype=np.float64)
@@ -315,9 +311,6 @@ def build_eval_graph(x_train_np, x_test_np):
         edge_index,
     )
 
-
-
-
 class LiteGCN(nn.Module):
     def __init__(self, in_dim, hidden_dim, num_classes):
         super().__init__()
@@ -340,11 +333,6 @@ class LiteGCN(nn.Module):
         if return_embedding:
             return logits, h
         return logits
-
-
-
-
-
 
 GPC_PER_CLASS = 10
 ANCHOR_PER_CLASS = 4
@@ -461,10 +449,6 @@ def select_lightgntk_nodes(
         return torch.unique(torch.cat(selected_parts))
     return torch.empty(0, dtype=torch.long, device=DEVICE)
 
-
-
-
-
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
 index_window = deque(maxlen=WINDOW_SIZE)
@@ -496,9 +480,6 @@ y_prob_test = []
 
 window_metrics = []
 selection_sizes = []
-
-
-
 
 print("\n=== Streaming LightGNTK-Lite ===")
 
@@ -559,8 +540,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
             weight_decay=WEIGHT_DECAY,
         )
 
-
-
     new_train_mask = torch.tensor(
         new_train_mask_np,
         dtype=torch.bool,
@@ -595,7 +574,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
 
     selection_sizes.append(int(used_idx.numel()))
 
-
     epochs_now = EPOCHS_FIRST if first_window else EPOCHS_INC
 
     for _ in range(epochs_now):
@@ -604,18 +582,14 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
             x_train, edge_train, return_embedding=True
         )
 
-
         loss = criterion(
             logits[used_idx],
             y_train[used_idx],
         )
 
-
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
-
-
 
 
     eval_test_mask = (
@@ -642,9 +616,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
         y_true_test.extend(y_test_np.tolist())
         y_pred_test.extend(pred_t.cpu().numpy().tolist())
         y_prob_test.append(probs_t.cpu().numpy())
-
-
-
 
     if test_mask_full.any():
         x_wtest_np = x_win[test_mask_full]
@@ -684,9 +655,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
                 zero_division=0,
             ),
         })
-
-
-
 
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
@@ -739,7 +707,6 @@ print(
     f"{np.mean(selection_sizes) if selection_sizes else 0:.2f}"
 )
 
-
 try:
     cm = confusion_matrix(
         y_true_test, y_pred_test, labels=ids
@@ -763,7 +730,6 @@ try:
     plt.close(fig)
 except Exception as e:
     print("Confusion matrix failed:", e)
-
 
 try:
     if y_prob_test.shape[0] == len(y_true_test):
@@ -791,7 +757,6 @@ try:
                 )
 except Exception as e:
     print("ROC failed:", e)
-
 
 if window_metrics:
     wdf = pd.DataFrame(window_metrics)
