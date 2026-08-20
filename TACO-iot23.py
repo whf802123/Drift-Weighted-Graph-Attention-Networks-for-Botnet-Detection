@@ -28,10 +28,6 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-
-
-
-
 CSV_PATH = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\iot23_combined_new.csv'
 
 WINDOW_SIZE = 1000
@@ -76,10 +72,6 @@ np.random.seed(SEED)
 random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
-
-
-
-
 
 def is_unnamed(colname):
     return (
@@ -370,10 +362,6 @@ print(
     f"reservoir={BUFFER_SIZE}"
 )
 
-
-
-
-
 def safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     n = x_np.shape[0]
 
@@ -392,7 +380,6 @@ def safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
         neginf=0.0,
     )
 
-
 def raw_pearson_edges(x_np: np.ndarray):
     n = x_np.shape[0]
 
@@ -409,7 +396,6 @@ def raw_pearson_edges(x_np: np.ndarray):
         src.astype(np.int64),
         dst.astype(np.int64),
     ])
-
 
 def edge_dict_to_tensors(edge_dict):
     if len(edge_dict) == 0:
@@ -442,7 +428,6 @@ def edge_dict_to_tensors(edge_dict):
 
     return edge_index, edge_weight
 
-
 def tensors_to_edge_dict(edge_index, edge_weight):
     out = {}
 
@@ -460,18 +445,11 @@ def tensors_to_edge_dict(edge_index, edge_weight):
         if u == v:
             continue
 
-
-
-
         old = out.get((u, v))
         if old is None or w > old:
             out[(u, v)] = w
 
     return out
-
-
-
-
 
 class TACO_GCN(nn.Module):
     def __init__(
@@ -527,10 +505,6 @@ class TACO_GCN(nn.Module):
         )
 
         return logits
-
-
-
-
 
 class GraphState:
     def __init__(
@@ -732,10 +706,6 @@ def expand_and_align_state(
 
     return state
 
-
-
-
-
 class FidelityReservoir:
     def __init__(
         self,
@@ -777,10 +747,6 @@ class FidelityReservoir:
                 )
 
         return protected
-
-
-
-
 
 def cosine_similarity_np(a, b):
     denom = (
@@ -933,8 +899,6 @@ def taco_coarsen(
         if uf.count <= target_n:
             break
 
-
-
     groups_dict = {}
 
     for i in range(n):
@@ -954,7 +918,6 @@ def taco_coarsen(
     for new_id, members in enumerate(groups):
         for old_id in members:
             old_to_new[old_id] = new_id
-
 
     degrees = np.zeros(
         n,
@@ -1076,8 +1039,6 @@ def taco_coarsen(
         dim=0,
     )
 
-
-
     new_edge_dict = {}
 
     if state.edge_index.numel() > 0:
@@ -1137,10 +1098,6 @@ def taco_coarsen(
         clusters=new_clusters,
     )
 
-
-
-
-
 def build_eval_graph(
     state: GraphState,
     current_train_global_ids,
@@ -1176,8 +1133,6 @@ def build_eval_graph(
         current_train_global_ids,
         dtype=np.int64,
     )
-
-
 
     raw_eval_np = np.concatenate(
         [
@@ -1247,10 +1202,6 @@ def build_eval_graph(
         n_train_mem,
     )
 
-
-
-
-
 def train_one_period(
     model,
     optimizer,
@@ -1294,11 +1245,6 @@ def hidden_for_coarsening(
         edge_weight=state.edge_weight,
         return_hidden=True,
     )
-
-
-
-
-
 features_window = deque(
     maxlen=WINDOW_SIZE
 )
@@ -1433,9 +1379,6 @@ for start in tqdm(
         current_train_x_np
     )
 
-
-
-
     if first_window:
         state = singleton_state(
             raw_global_ids=current_train_global_ids,
@@ -1471,18 +1414,12 @@ for start in tqdm(
 
     expanded_nodes = state.num_nodes
 
-
-
-
     train_one_period(
         model=model,
         optimizer=optimizer,
         state=state,
         epochs=epochs_now,
     )
-
-
-
 
     if first_window:
         eval_test_mask_full = test_mask_full
@@ -1571,9 +1508,6 @@ for start in tqdm(
             .tolist()
         )
 
-
-
-
     if first_window:
         new_train_global_ids = (
             current_train_global_ids
@@ -1592,9 +1526,6 @@ for start in tqdm(
     replay_nodes = reservoir.protected_coarse_nodes(
         state.n2c
     )
-
-
-
 
     hidden = hidden_for_coarsening(
         model,
@@ -1622,15 +1553,10 @@ for start in tqdm(
             f"reservoir={len(reservoir.buffer)}"
         )
 
-
 if model is None or state is None:
     raise RuntimeError(
         "The model was not initialized. Ensure WINDOW_SIZE is smaller than the number of valid samples."
     )
-
-
-
-
 
 print("\n=== TACO Diagnostics ===")
 print(f"Continual periods: {period_idx}")
@@ -1646,10 +1572,6 @@ print(
     f"Original training IDs represented in final graph: "
     f"{len(state.n2c)}"
 )
-
-
-
-
 
 y_true_test = np.asarray(
     y_true_test,
@@ -1741,10 +1663,6 @@ for k in [
         f"f1-score: {m['f1-score'] * 100:.2f}%"
     )
 
-
-
-
-
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -1784,11 +1702,6 @@ except Exception as e:
         "Error plotting the confusion matrix:",
         e,
     )
-
-
-
-
-
 
 try:
     if (
@@ -1906,10 +1819,6 @@ except Exception as e:
         "Error computing or plotting ROC curves:",
         e,
     )
-
-
-
-
 
 try:
     hidden_np = np.asarray(
