@@ -84,10 +84,6 @@ random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
-
-
-
-
 def is_unnamed(colname):
     return (
         colname == ''
@@ -390,10 +386,6 @@ def build_eval_graph(x_train_np, x_test_np):
         edge_index
     )
 
-
-
-
-
 def mask_features(x, p):
     if p <= 0:
         return x
@@ -448,10 +440,6 @@ def cos_matrix(a, b):
     a = F.normalize(a, dim=-1, eps=1e-12)
     b = F.normalize(b, dim=-1, eps=1e-12)
     return a @ b.T
-
-
-
-
 
 def cluster_once(embs, ids, k):
     ids = np.asarray(ids, dtype=np.int64)
@@ -528,10 +516,6 @@ def progressive_clustering(embs, ids, k, depth=0):
 
     return list(dict.fromkeys(int(x) for x in result))
 
-
-
-
-
 class ProxyMemory:
     def __init__(self, x, edge_index, novelty):
         self.x = x.detach().cpu()
@@ -571,10 +555,6 @@ def retention(encoder, memory):
     x, e = memory.tensors()
     now = novelty(encoder, x, e)
     return round(now / max(abs(memory.novelty), 1e-8), 2)
-
-
-
-
 
 def train_fast(x, edge_index, in_dim):
     enc = TraceGCN(in_dim).to(DEVICE)
@@ -635,10 +615,6 @@ def load_reference(state, in_dim):
         p.requires_grad_(False)
     return m
 
-
-
-
-
 def fit_probe(train_emb, train_y):
     classes = np.unique(train_y)
     if len(classes) < 2:
@@ -668,10 +644,6 @@ def probe_predict(probe, emb):
         prob[:, int(c)] = raw[:, j]
     return pred, prob
 
-
-
-
-
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
 index_window = deque(maxlen=WINDOW_SIZE)
@@ -691,10 +663,6 @@ y_prob_test_all, hidden_test = [], []
 
 window_ids, window_acc, window_p, window_r, window_f1 = [], [], [], [], []
 proxy_counts, spaced_counts = [], []
-
-
-
-
 
 print("\n=== Streaming TRACE Training ===")
 
@@ -887,10 +855,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
 if slow_encoder is None:
     raise RuntimeError("The model was not initialized. Check WINDOW_SIZE.")
 
-
-
-
-
 print("\n=== TRACE Diagnostics ===")
 print(f"Sessions: {session_idx}")
 print(f"Stored proxy memories: {len(proxy_memories)}")
@@ -920,10 +884,6 @@ if window_ids:
     fig.tight_layout()
     plt.show()
     plt.close(fig)
-
-
-
-
 
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
@@ -965,10 +925,6 @@ for k in ["macro avg", "weighted avg"]:
         f"f1={m['f1-score']*100:.2f}%"
     )
 
-
-
-
-
 try:
     cm = confusion_matrix(
         y_true_test, y_pred_test, labels=np.arange(NUM_CLASSES)
@@ -982,10 +938,6 @@ try:
     plt.close(fig)
 except Exception as e:
     print("Confusion matrix failed:", e)
-
-
-
-
 
 try:
     if (
@@ -1062,10 +1014,6 @@ try:
 
 except Exception as e:
     print("ROC failed:", e)
-
-
-
-
 
 try:
     h = np.asarray(hidden_test, dtype=np.float64)
