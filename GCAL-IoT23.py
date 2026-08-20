@@ -99,11 +99,6 @@ random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
-
-
-
-
-
 import ipaddress
 
 
@@ -543,11 +538,6 @@ print(
     f"features={features.shape[1]}"
 )
 
-
-
-
-
-
 def safe_corrcoef(x_np):
     if len(x_np) == 0:
         return np.empty((0, 0), dtype=np.float64)
@@ -727,10 +717,6 @@ def build_eval_graph(
         edge_index,
     )
 
-
-
-
-
 class GCALBackbone(nn.Module):
     def __init__(
         self,
@@ -797,10 +783,6 @@ class GCALBackbone(nn.Module):
             )
 
         return logits
-
-
-
-
 
 def information_max_loss(
     logits,
@@ -885,10 +867,6 @@ def cosine_gradient_distance(
             eps=1e-8,
         ).mean()
     )
-
-
-
-
 
 class LiteMemoryGenerator(nn.Module):
     def __init__(
@@ -1297,10 +1275,6 @@ def fit_and_store_memory(
         mem_weight,
     )
 
-
-
-
-
 features_window = deque(
     maxlen=WINDOW_SIZE
 )
@@ -1331,12 +1305,8 @@ y_prob_test = []
 window_metrics = []
 memory_sizes = []
 
-
-
-
-
 print(
-    "\n=== Streaming GCAL-Lite ==="
+    "\n=== Streaming GCAL ==="
 )
 
 for start in tqdm(
@@ -1489,9 +1459,6 @@ for start in tqdm(
             weight_decay=WD_MEMORY,
         )
 
-
-
-
         for _ in range(
             SOURCE_EPOCHS
         ):
@@ -1528,9 +1495,6 @@ for start in tqdm(
             )
 
     else:
-
-
-
         for _ in range(
             ADAPT_EPOCHS
         ):
@@ -1586,9 +1550,6 @@ for start in tqdm(
             )
         )
 
-
-
-
     should_generate_memory = (
         first_window
         or window_id % MEMORY_INTERVAL == 0
@@ -1619,10 +1580,7 @@ for start in tqdm(
                 memory.x.shape[0]
             )
         )
-
-
-
-
+        
     eval_test_mask = (
         test_mask_full
         if first_window
@@ -1687,9 +1645,6 @@ for start in tqdm(
             probs_test.cpu()
             .numpy()
         )
-
-
-
 
     if test_mask_full.any():
         x_window_test_np = x_win[
@@ -1760,16 +1715,11 @@ for start in tqdm(
             ),
         })
 
-
 if model is None:
     raise RuntimeError(
         "Model was never initialized. "
         "Check WINDOW_SIZE and dataset size."
     )
-
-
-
-
 
 y_true_test = np.asarray(
     y_true_test,
@@ -1887,10 +1837,6 @@ for k in [
         f"F1={m['f1-score']*100:.2f}%"
     )
 
-
-
-
-
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -1929,10 +1875,6 @@ except Exception as e:
         "Confusion matrix failed:",
         e,
     )
-
-
-
-
 
 try:
     if (
@@ -2009,10 +1951,6 @@ except Exception as e:
         "ROC failed:",
         e,
     )
-
-
-
-
 
 if window_metrics:
     window_df = pd.DataFrame(
