@@ -30,10 +30,6 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-
-
-
-
 CSV_PATH = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\iot23_combined_new.csv'
 
 WINDOW_SIZE = 1000
@@ -48,7 +44,6 @@ TRAIN_RATIO      = 0.70
 VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
 SEED = 42
-
 
 SAMPLE_FRAC = 0.05
 MANUAL_MINORITY_LABELS = {'C&C', 'C&C-HeartBeat'}
@@ -84,10 +79,6 @@ torch.manual_seed(SEED)
 np.random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
-
-
-
-
 
 def is_unnamed(colname):
     return (
@@ -141,8 +132,6 @@ print(
     f"Rows: {before} -> {after}"
 )
 
-
-
 print(f"Minority (kept intact): {sorted(MANUAL_MINORITY_LABELS)}")
 print(f"Sampling {SAMPLE_FRAC * 100:.1f}% for ALL other classes ...")
 
@@ -152,7 +141,6 @@ def keep_or_sample(group: pd.DataFrame) -> pd.DataFrame:
     if lab in MANUAL_MINORITY_LABELS:
         return group
     return group.sample(frac=SAMPLE_FRAC, random_state=SEED)
-
 
 df = (
     df.groupby('label', group_keys=False)
@@ -348,10 +336,6 @@ print(
     f"TEM capacity={TEM_CAPACITY}, sampler={TEM_SAMPLER}"
 )
 
-
-
-
-
 def safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     n = x_np.shape[0]
 
@@ -369,7 +353,6 @@ def safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
         posinf=0.0,
         neginf=0.0,
     )
-
 
 def build_train_adjacency(
     x_train_np: np.ndarray,
@@ -391,7 +374,6 @@ def build_train_adjacency(
     np.fill_diagonal(adj, 1.0)
 
     return adj
-
 
 def build_inductive_eval_adjacency(
     x_train_np: np.ndarray,
@@ -430,7 +412,6 @@ def build_inductive_eval_adjacency(
 
     return x_all, adj
 
-
 def normalized_adjacency(
     adj_np: np.ndarray,
 ) -> torch.Tensor:
@@ -447,10 +428,6 @@ def normalized_adjacency(
     col_scale = col_deg.pow(-0.5).unsqueeze(0)
 
     return row_scale * A * col_scale
-
-
-
-
 
 @torch.no_grad()
 def topology_aware_embeddings(
@@ -472,7 +449,6 @@ def topology_aware_embeddings(
         e = A_hat @ e
 
     return e.detach()
-
 
 class PDGNNClassifier(nn.Module):
     def __init__(
@@ -511,10 +487,6 @@ class PDGNNClassifier(nn.Module):
         logits = self.fc2(h)
 
         return logits, h
-
-
-
-
 
 class TEMBuffer:
     def __init__(
@@ -581,7 +553,6 @@ class TEMBuffer:
                 if j < self.capacity:
                     self.vecs[j] = v[0]
                     self.labels[j] = y[0]
-
 
 def exact_two_hop_coverage_counts(
     adj_np: np.ndarray,
@@ -694,10 +665,6 @@ def select_tem_candidates(
         dtype=np.int64,
     )
 
-
-
-
-
 def class_balanced_ce(
     logits: torch.Tensor,
     y: torch.Tensor,
@@ -724,11 +691,6 @@ def class_balanced_ce(
         y,
         weight=weights,
     )
-
-
-
-
-
 features_window = deque(
     maxlen=WINDOW_SIZE
 )
@@ -824,9 +786,6 @@ for start in tqdm(
     test_mask_full = is_test[
         idx_win_np
     ]
-
-
-
 
     x_train_np = x_win_np[
         train_mask_full
@@ -939,8 +898,6 @@ for start in tqdm(
             loss.backward()
             optimizer.step()
 
-
-
         selected_ids = select_tem_candidates(
             candidate_local_ids=current_ids,
             y_train_np=y_train_np,
@@ -967,9 +924,6 @@ for start in tqdm(
             )
 
     session_idx += 1
-
-
-
 
     if first_window:
         eval_test_mask_full = (
@@ -1051,16 +1005,11 @@ for start in tqdm(
             .tolist()
         )
 
-
 if model is None:
     raise RuntimeError(
         "The model was not initialized. Ensure WINDOW_SIZE "
         "is smaller than the number of valid samples."
     )
-
-
-
-
 
 print("\n=== PDGNN + TEM Diagnostics ===")
 print(f"Streaming sessions: {session_idx}")
@@ -1072,10 +1021,6 @@ print(
     f"TEM selected candidates seen: "
     f"{tem.n_seen_selected}"
 )
-
-
-
-
 
 y_true_test = np.asarray(
     y_true_test,
@@ -1161,10 +1106,6 @@ for k in [
         f"f1-score: {m['f1-score'] * 100:.2f}%"
     )
 
-
-
-
-
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -1212,10 +1153,6 @@ except Exception as e:
         "Error plotting the confusion matrix:",
         e,
     )
-
-
-
-
 
 try:
     if NUM_CLASSES > 2:
@@ -1304,10 +1241,6 @@ except Exception as e:
         "Error computing or plotting ROC curves:",
         e,
     )
-
-
-
-
 
 try:
     hidden_np = np.asarray(
