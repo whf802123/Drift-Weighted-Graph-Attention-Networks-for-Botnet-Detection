@@ -235,10 +235,6 @@ print(
     f"features={features.shape[1]}"
 )
 
-
-
-
-
 def safe_corrcoef(x_np):
     if len(x_np) == 0:
         return np.empty((0, 0), dtype=np.float64)
@@ -246,7 +242,6 @@ def safe_corrcoef(x_np):
         return np.ones((1, 1), dtype=np.float64)
     c = np.corrcoef(x_np)
     return np.nan_to_num(c, nan=0.0, posinf=0.0, neginf=0.0)
-
 
 def build_train_graph(x_np):
     n = len(x_np)
@@ -267,7 +262,6 @@ def build_train_graph(x_np):
         dtype=torch.long,
         device=DEVICE,
     )
-
 
 def build_eval_graph(x_train_np, x_test_np):
     n_train = len(x_train_np)
@@ -314,9 +308,6 @@ def build_eval_graph(x_train_np, x_test_np):
         edge_index,
     )
 
-
-
-
 class LiteGCN(nn.Module):
     def __init__(self, in_dim, hidden_dim, num_classes):
         super().__init__()
@@ -339,11 +330,6 @@ class LiteGCN(nn.Module):
         if return_embedding:
             return logits, h
         return logits
-
-
-
-
-
 
 LTF_MEMORY_PER_CLASS = 12
 LTF_SIM_PER_CLASS = 12
@@ -488,17 +474,12 @@ def ltf_distribution_loss(emb, y, sub_idx, sim_idx):
 
     return loss / max(used, 1)
 
-
-
-
-
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
 index_window = deque(maxlen=WINDOW_SIZE)
 
 model = None
 optimizer = None
-
 
 if NUM_CLASSES == 2:
     train_labels_only = labels[train_idx]
@@ -524,10 +505,7 @@ y_prob_test = []
 window_metrics = []
 selection_sizes = []
 
-
-
-
-print("\n=== Streaming LTF-Lite ===")
+print("\n=== Streaming LTF ===")
 
 for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
     bx = features[start:start + BATCH_SIZE]
@@ -640,9 +618,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
         loss.backward()
         optimizer.step()
 
-
-
-
     eval_test_mask = (
         test_mask_full
         if first_window
@@ -667,9 +642,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
         y_true_test.extend(y_test_np.tolist())
         y_pred_test.extend(pred_t.cpu().numpy().tolist())
         y_prob_test.append(probs_t.cpu().numpy())
-
-
-
 
     if test_mask_full.any():
         x_wtest_np = x_win[test_mask_full]
@@ -709,9 +681,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LTF-Lite"):
                 zero_division=0,
             ),
         })
-
-
-
 
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
@@ -764,7 +733,6 @@ print(
     f"{np.mean(selection_sizes) if selection_sizes else 0:.2f}"
 )
 
-
 try:
     cm = confusion_matrix(
         y_true_test, y_pred_test, labels=ids
@@ -788,7 +756,6 @@ try:
     plt.close(fig)
 except Exception as e:
     print("Confusion matrix failed:", e)
-
 
 try:
     if y_prob_test.shape[0] == len(y_true_test):
@@ -817,7 +784,6 @@ try:
 except Exception as e:
     print("ROC failed:", e)
 
-
 if window_metrics:
     wdf = pd.DataFrame(window_metrics)
     print(
@@ -840,3 +806,4 @@ if window_metrics:
     fig.tight_layout()
     plt.show()
     plt.close(fig)
+    
