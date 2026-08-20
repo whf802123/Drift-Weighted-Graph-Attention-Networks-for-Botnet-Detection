@@ -152,10 +152,7 @@ if not SWEEP_CHILD:
     plt.show()
     plt.close(fig)
 
-
     sys.exit(0)
-
-
 
 CSV_PATH         = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\iot23_combined_new.csv'
 WINDOW_SIZE      = 1000
@@ -164,7 +161,7 @@ GAT_EPOCHS_FIRST = 10
 GAT_EPOCHS_INC   = 2
 ATTN_HEADS       = 4
 HIDDEN_CHANNELS  = 8
-CORR_THRESHOLD   = float(os.environ.get("CORR_THRESHOLD", "0.5"))
+CORR_THRESHOLD   = float(os.environ.get("CORR_THRESHOLD", "0.4"))
 TRAIN_RATIO      = 0.70
 VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
@@ -176,10 +173,6 @@ USE_REPLAY       = True
 REPLAY_RATIO     = 0.10
 
 ENTROPY_LAMBDA   = 1e-3
-
-
-
-
 
 IRGD_ENABLED          = True
 IRGD_ON_FIRST_WINDOW  = False
