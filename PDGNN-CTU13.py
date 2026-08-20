@@ -30,7 +30,6 @@ CSV_PATH = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
 WINDOW_SIZE = 1000
 BATCH_SIZE = 100
 
-
 EPOCHS_FIRST = 10
 EPOCHS_INC = 1
 
@@ -39,7 +38,6 @@ TRAIN_RATIO      = 0.70
 VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
 SEED = 42
-
 
 PDGNN_HIDDEN = 256
 PDGNN_L = 2
@@ -101,10 +99,8 @@ val_idx, test_idx = train_test_split(
     shuffle=True,
 )
 
-
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians).fillna(0.0)
-
 
 scaler = StandardScaler(with_mean=True, with_std=True)
 features = np.empty_like(feat_df.values, dtype=np.float64)
@@ -320,9 +316,6 @@ def select_tem_candidates(
         ]
         if cls_ids.size == 0:
             continue
-
-
-
         k = max(1, int(np.ceil(TEM_STORE_RATIO * cls_ids.size)))
         k = min(k, cls_ids.size)
 
@@ -340,10 +333,6 @@ def select_tem_candidates(
 
     return np.asarray(selected, dtype=np.int64)
 
-
-
-
-
 def class_balanced_ce(logits: torch.Tensor, y: torch.Tensor):
     counts = torch.bincount(y, minlength=NUM_CLASSES).float()
     weights = torch.zeros(NUM_CLASSES, dtype=torch.float32, device=DEVICE)
@@ -352,10 +341,6 @@ def class_balanced_ce(logits: torch.Tensor, y: torch.Tensor):
     weights[present] = 1.0 / counts[present]
 
     return F.cross_entropy(logits, y, weight=weights)
-
-
-
-
 
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
@@ -412,9 +397,6 @@ for start in tqdm(
     train_mask_full = is_train[idx_win_np]
     test_mask_full = is_test[idx_win_np]
 
-
-
-
     x_train_np = x_win_np[train_mask_full]
     y_train_np = y_win_np[train_mask_full]
     new_train_mask_local_np = new_mask_full[train_mask_full]
@@ -448,9 +430,6 @@ for start in tqdm(
             seed=SEED + 77,
         )
 
-
-
-
     if first_window:
         current_ids = np.arange(len(x_train_np), dtype=np.int64)
         epochs_now = EPOCHS_FIRST
@@ -471,9 +450,6 @@ for start in tqdm(
             dtype=torch.long,
             device=DEVICE,
         )
-
-
-
 
         if len(tem) > 0:
             train_te = torch.cat([current_te, tem.vecs], dim=0)
@@ -513,9 +489,6 @@ for start in tqdm(
             tem.add(topo_train[selected_t], selected_y)
 
     session_idx += 1
-
-
-
 
     if first_window:
         eval_test_mask_full = test_mask_full
@@ -558,19 +531,11 @@ if model is None:
         "The model was not initialized. Ensure WINDOW_SIZE is smaller than the number of valid samples."
     )
 
-
-
-
-
 print("\n=== PDGNN + TEM Diagnostics ===")
 print(f"Streaming sessions: {session_idx}")
 print(f"TEM current size: {len(tem)} / {TEM_CAPACITY}")
 print(f"TEM selected candidates seen: {tem.n_seen_selected}")
 print("TEM stores fixed-size topology-aware embeddings, not raw ego-subgraphs.")
-
-
-
-
 
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
@@ -627,10 +592,6 @@ for k in ["macro avg", "weighted avg"]:
         f"f1-score: {m['f1-score'] * 100:.2f}%"
     )
 
-
-
-
-
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -657,10 +618,6 @@ try:
 except Exception as e:
     print("Error plotting the confusion matrix:", e)
 
-
-
-
-
 try:
     if (
         NUM_CLASSES == 2
@@ -686,10 +643,6 @@ try:
         print(f"ROC-AUC: {roc_auc * 100:.2f}%")
 except Exception as e:
     print("Error computing or plotting ROC curves:", e)
-
-
-
-
 
 try:
     hidden_np = np.asarray(hidden_test, dtype=np.float64)
