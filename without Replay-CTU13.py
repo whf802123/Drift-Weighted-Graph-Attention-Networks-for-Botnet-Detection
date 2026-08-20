@@ -83,8 +83,8 @@ if not SWEEP_CHILD:
             print(proc.stdout)
             print(proc.stderr)
             raise RuntimeError(
-                f"CORR_THRESHOLD={threshold:.1f} 运行失败，"
-                f"请查看日志：{log_path}"
+                f"CORR_THRESHOLD={threshold:.1f} failed. "
+                f"See the log: {log_path}"
             )
 
         result_prefix = "__CORR_SWEEP_RESULT__="
@@ -96,8 +96,8 @@ if not SWEEP_CHILD:
         if not result_lines:
             print(proc.stdout)
             raise RuntimeError(
-                f"CORR_THRESHOLD={threshold:.1f} 未输出可解析指标，"
-                f"请查看日志：{log_path}"
+                f"CORR_THRESHOLD={threshold:.1f} did not produce parseable metrics. "
+                f"See the log: {log_path}"
             )
 
         metrics = json.loads(result_lines[-1][len(result_prefix):])
@@ -209,19 +209,19 @@ print(f"\n[Run config] CORR_THRESHOLD = {CORR_THRESHOLD:.1f}")
 df = pd.read_csv(CSV_PATH)
 
 if 'Label' not in df.columns:
-    raise KeyError("未找到列名 'Label'。请确认 CTU13 CSV 中标签列名为 Label。")
+    raise KeyError("Column 'Label' was not found. Ensure that the label column in the CTU13 CSV is named 'Label'.")
 
 
 feature_cols = [c for c in df.columns if c not in ('num', 'Label')]
 if len(feature_cols) == 0:
-    raise RuntimeError("未找到可用特征列。")
+    raise RuntimeError("No usable feature columns were found.")
 
 
 labels = df['Label'].astype(int).to_numpy(dtype=np.int64)
 unique_labels = np.unique(labels)
 if len(unique_labels) != 2 or set(unique_labels.tolist()) != {0, 1}:
     raise RuntimeError(
-        f"当前代码按 CTU13 二分类 0/1 设置，实际标签为 {unique_labels.tolist()}。"
+        f"This code expects binary CTU13 labels 0/1; actual labels: {unique_labels.tolist()}."
     )
 
 label_to_id = {'Normal': 0, 'Botnet': 1}
@@ -276,7 +276,7 @@ print(
 train_unique_ids = np.unique(labels[train_idx])
 NUM_CLASSES = len(train_unique_ids)
 if NUM_CLASSES != 2:
-    raise RuntimeError("训练集未同时包含 Normal 和 Botnet 两类。")
+    raise RuntimeError("The training set does not contain both Normal and Botnet classes.")
 
 print("CTU13 label mapping:", id_to_label)
 print(f"Samples: total={N_total}, train={len(train_idx)}, test={len(test_idx)}")
@@ -904,7 +904,7 @@ print(f"Expected hold-out samples: {len(test_idx)}")
 print(f"Actually evaluated samples: {len(y_true_test)}")
 
 if len(y_true_test) == 0:
-    print("测试集为空：检查划分或窗口设置。")
+    print("The test set is empty. Check the split or window settings.")
 else:
     unique_ids = np.arange(NUM_CLASSES)
     target_names = [id_to_label[i] for i in unique_ids]
@@ -979,13 +979,13 @@ else:
         plt.show()
         plt.close(fig_cm)
     except Exception as e:
-        print("绘制混淆矩阵出错：", e)
+        print("Error plotting the confusion matrix:", e)
 
 
     try:
         if NUM_CLASSES > 2:
             if y_prob_test_all.shape[0] == 0:
-                print("[ROC] 没有收集到测试概率，跳过绘图。")
+                print("[ROC] No test probabilities were collected; skipping the plot.")
             else:
                 classes_sorted = unique_ids.tolist()
                 y_true_bin = label_binarize(
@@ -1020,11 +1020,11 @@ else:
                     plt.tight_layout()
                     plt.show()
                 else:
-                    print("[ROC] 各类别在测试集中都缺少正/负样本，无法绘制多分类 ROC。")
+                    print("[ROC] Every class lacks positive or negative samples in the test set, so multiclass ROC curves cannot be plotted.")
         else:
-            print("[ROC] 当前为二分类，已跳过多分类 ROC。")
+            print("[ROC] The current task is binary; skipping multiclass ROC curves.")
     except Exception as e:
-        print("ROC 计算/绘制出错：", e)
+        print("Error computing or plotting ROC curves:", e)
 
 
 
@@ -1055,13 +1055,13 @@ try:
             labels_tsne = labels_tsne[finite_mask]
 
         if len(hidden_test_np) <= 10:
-            print("t-SNE: 有效测试隐藏向量过少，跳过可视化。")
+            print("t-SNE: Too few valid test hidden vectors; skipping visualization.")
         else:
 
             dim_std = hidden_test_np.std(axis=0)
             useful_dims = dim_std > 1e-10
             if useful_dims.sum() < 2:
-                print("t-SNE: embedding 有效变化维度少于 2，无法可靠可视化。")
+                print("t-SNE: The embedding has fewer than two varying dimensions and cannot be visualized reliably.")
             else:
                 if useful_dims.sum() != hidden_test_np.shape[1]:
                     removed = hidden_test_np.shape[1] - int(useful_dims.sum())
@@ -1135,7 +1135,6 @@ try:
                 plt.show()
                 plt.close(fig_tsne)
     else:
-        print("t-SNE: 测试隐藏向量过少，跳过可视化。")
+        print("t-SNE: Too few test hidden vectors; skipping visualization.")
 except Exception as e:
-    print("t-SNE 可视化失败：", e)
-
+    print("t-SNE visualization failed:", e)

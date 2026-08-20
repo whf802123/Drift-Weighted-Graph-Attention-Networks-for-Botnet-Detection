@@ -783,4 +783,4 @@ if EXPORT_EMB and len(all_embeddings) > 0:
         out.to_csv(EMB_CSV_PATH, index=False)
         print(f"\n[OK] Exported embeddings to: {EMB_CSV_PATH}")
     except Exception as e:
-        print("Output embeddings Error：", e)
+        print("Output embeddings Error:", e)

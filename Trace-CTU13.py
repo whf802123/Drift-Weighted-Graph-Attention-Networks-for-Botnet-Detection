@@ -69,13 +69,13 @@ if torch.cuda.is_available():
 
 df = pd.read_csv(CSV_PATH)
 if "Label" not in df.columns:
-    raise KeyError("未找到 Label 列。")
+    raise KeyError("Column 'Label' was not found.")
 
 feature_cols = [c for c in df.columns if c not in ("num", "Label")]
 labels = df["Label"].astype(int).to_numpy(np.int64)
 
 if set(np.unique(labels).tolist()) != {0, 1}:
-    raise RuntimeError(f"当前代码按二分类 0/1 设置，实际标签={np.unique(labels)}")
+    raise RuntimeError(f"This code expects binary labels 0/1; actual labels: {np.unique(labels)}")
 
 id_to_label = {0: "Normal", 1: "Botnet"}
 
@@ -690,7 +690,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
 
 
 if slow_encoder is None:
-    raise RuntimeError("模型未初始化，请检查 WINDOW_SIZE。")
+    raise RuntimeError("The model was not initialized. Check WINDOW_SIZE.")
 
 
 
@@ -743,7 +743,7 @@ print(f"Expected hold-out samples: {len(test_idx)}")
 print(f"Actually evaluated samples: {len(y_true_test)}")
 
 if len(y_true_test) == 0:
-    raise RuntimeError("没有测试样本被评估。")
+    raise RuntimeError("No test samples were evaluated.")
 
 target_names = [id_to_label[i] for i in range(NUM_CLASSES)]
 report = classification_report(
@@ -858,4 +858,3 @@ try:
         plt.close(fig)
 except Exception as e:
     print("t-SNE failed:", e)
-
