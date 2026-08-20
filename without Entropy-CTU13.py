@@ -23,8 +23,6 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-
-
 CSV_PATH         = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
 WINDOW_SIZE      = 1000
 BATCH_SIZE       = 100
@@ -45,10 +43,6 @@ REPLAY_RATIO     = 0.10
 
 ENTROPY_LAMBDA   = 0.0
 
-
-
-
-
 IRGD_ENABLED          = True
 IRGD_ON_FIRST_WINDOW  = False
 IRGD_REL_WEIGHT       = 1.0
@@ -60,8 +54,6 @@ torch.manual_seed(SEED)
 np.random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
-
-
 
 df = pd.read_csv(CSV_PATH)
 
@@ -256,8 +248,6 @@ class WeightedGATClassifier(nn.Module):
         logits = self.classifier(x2)
         return logits, x2
 
-
-
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
 index_window = deque(maxlen=WINDOW_SIZE)
@@ -275,22 +265,16 @@ if NUM_CLASSES == 2:
 else:
     w_neg = w_pos = 1.0
 
-
-
 y_true_test = []
 y_pred_test = []
 y_prob_test_all = []
 hidden_test = []
 
-
 global_idx = 0
-
 
 irgd_steps = 0
 irgd_conflicts = 0
 irgd_cosines = []
-
-
 
 def select_training_indices(
     n_nodes,
@@ -320,28 +304,23 @@ def select_training_indices(
 
     return torch.cat(used_parts, dim=0)
 
-
 def build_self_only_graph(n_nodes):
     nodes = torch.arange(n_nodes, dtype=torch.long, device=DEVICE)
     return torch.stack([nodes, nodes], dim=0)
-
 
 def _loss_on_used_nodes(logits, y_train_local, used_idx):
     if used_idx is None or used_idx.numel() == 0:
         return None
     return criterion(logits[used_idx], y_train_local[used_idx])
 
-
 def _zeros_like_param(param):
     return torch.zeros_like(param, memory_format=torch.preserve_format)
-
 
 def _materialize_grads(grads, params):
     out = []
     for g, p in zip(grads, params):
         out.append(_zeros_like_param(p) if g is None else g)
     return out
-
 
 def apply_irgd_step(
     model,
@@ -357,13 +336,10 @@ def apply_irgd_step(
         id(p) for p in list(model.gat1.parameters()) + list(model.gcn2.parameters())
     }
 
-
     logits_full, _ = model(x_train_tensor, train_edge_index)
     ce_full = _loss_on_used_nodes(logits_full, y_train_tensor, used_idx)
     if ce_full is None:
         return None
-
-
 
     loss_full = ce_full
 
@@ -376,11 +352,8 @@ def apply_irgd_step(
     )
     grads_graph = _materialize_grads(grads_graph_raw, params)
 
-
     logits_self, _ = model(x_train_tensor, self_edge_index)
     ce_self = _loss_on_used_nodes(logits_self, y_train_tensor, used_idx)
-
-
 
     grads_self_raw = torch.autograd.grad(
         ce_self,
@@ -449,7 +422,6 @@ def apply_irgd_step(
         'cosine': float(cosine),
     }
 
-
 def attention_heads_node_mean_from_cached_incoming(
     ei_used,
     att_heads,
@@ -481,7 +453,6 @@ def attention_heads_node_mean_from_cached_incoming(
     ref_std = ref.std(dim=0, keepdim=True)
     in_mean = (in_mean - ref_mean) / (ref_std + 1e-6)
     return in_mean
-
 
 def sparse_entropy_loss_sum_heads(
     ei_used,
@@ -525,8 +496,6 @@ def sparse_entropy_loss_sum_heads(
 
     return norm_entropy.mean()
 
-
-
 for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     batch_feats = features[start:start + BATCH_SIZE]
     batch_labels = labels[start:start + BATCH_SIZE]
@@ -544,12 +513,9 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
 
     first_window = (model is None)
 
-
     x_win_np = np.asarray(features_window, dtype=np.float64)
     y_win_np = np.asarray(labels_window, dtype=np.int64)
     idx_win_np = np.asarray(index_window, dtype=np.int64)
-
-
 
     new_mask_full = np.zeros(WINDOW_SIZE, dtype=bool)
     if first_window:
@@ -560,10 +526,8 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     train_mask_full = is_train[idx_win_np]
     test_mask_full = is_test[idx_win_np]
 
-
     x_train_np = x_win_np[train_mask_full]
     y_train_np = y_win_np[train_mask_full]
-
 
     new_train_mask_local_np = new_mask_full[train_mask_full]
 
@@ -577,7 +541,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         dtype=torch.bool,
         device=DEVICE,
     )
-
 
     train_edge_index = build_train_graph(x_train_np)
 
@@ -609,13 +572,10 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     else:
         epochs_now = GAT_EPOCHS_INC
 
-
     self_edge_index = build_self_only_graph(x_train_tensor.size(0))
-
 
     for _ in range(epochs_now):
         model.train()
-
 
         used_idx = select_training_indices(
             x_train_tensor.size(0),
@@ -648,7 +608,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             if ce_loss is None:
                 continue
 
-
             loss = ce_loss
 
             optimizer.zero_grad(set_to_none=True)
@@ -656,9 +615,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             if IRGD_GRAD_CLIP is not None:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), IRGD_GRAD_CLIP)
             optimizer.step()
-
-
-
 
     if first_window:
         eval_test_mask_full = test_mask_full
@@ -668,8 +624,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     if eval_test_mask_full.any():
         x_new_test_np = x_win_np[eval_test_mask_full]
         y_new_test_np = y_win_np[eval_test_mask_full]
-
-
 
         x_eval_tensor, eval_edge_index = build_inductive_eval_graph(
             x_train_np,
@@ -707,9 +661,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
 
     model.cached_att = None
 
-
-
-
 if IRGD_ENABLED:
     print("\n=== IRGD Training Diagnostics ===")
     print(f"IRGD update steps: {irgd_steps}")
@@ -719,8 +670,6 @@ if IRGD_ENABLED:
         print(f"Conflict steps: {irgd_conflicts} ({conflict_rate:.2f}%)")
         print(f"Mean cosine(g_self, g_rel): {mean_cos:.4f}")
         print("No-conflict steps are mathematically identical to baseline full-graph updates when IRGD_REL_WEIGHT=1.0.")
-
-
 
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
@@ -768,7 +717,6 @@ else:
             f"f1-score: {m['f1-score'] * 100:.2f}%"
         )
 
-
     try:
         labels_order = unique_ids.tolist()
         display_names = [id_to_label[i] for i in labels_order]
@@ -781,7 +729,6 @@ else:
             confusion_matrix=cm,
             display_labels=display_names,
         )
-
 
         fig_cm, ax_cm = plt.subplots(figsize=(5.6, 5.0))
         disp.plot(values_format='d', cmap='Blues', colorbar=False, ax=ax_cm)
@@ -800,7 +747,6 @@ else:
         plt.close(fig_cm)
     except Exception as e:
         print("Error plotting the confusion matrix:", e)
-
 
     try:
         if NUM_CLASSES > 2:
@@ -845,16 +791,6 @@ else:
             print("[ROC] The current task is binary; skipping multiclass ROC curves.")
     except Exception as e:
         print("Error computing or plotting ROC curves:", e)
-
-
-
-
-
-
-
-
-
-
 
 TSNE_MAX_PER_CLASS = 1000
 
