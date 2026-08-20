@@ -19,10 +19,10 @@ from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 CSV_PATH         = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
-WINDOW_SIZE      = 1000    # sliding window size
-BATCH_SIZE       = 100     # batch size per update
-GAT_EPOCHS_FIRST = 10      # training epochs for the first window
-GAT_EPOCHS_INC   = 1       # incremental fine-tuning epochs
+WINDOW_SIZE      = 1000
+BATCH_SIZE       = 100
+GAT_EPOCHS_FIRST = 10
+GAT_EPOCHS_INC   = 1
 
 ATTN_HEADS       = 4
 HIDDEN_CHANNELS  = 8
@@ -85,14 +85,14 @@ if torch.cuda.is_available():
 
 df = pd.read_csv(CSV_PATH)
 
-# df = df.sample(frac=0.05, random_state=SEED).reset_index(drop=True) # Part
+
 
 feature_cols = [c for c in df.columns if c not in ('num', 'Label')]
 labels = df['Label'].astype(int).values
 N_total = len(df)
 
 all_idx = np.arange(N_total)
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -137,7 +137,7 @@ class WeightedGATClassifier(nn.Module):
         self.dropout_p = dropout
         self.gcn2 = GCNConv(hidden_channels * heads, hidden_channels)
         self.classifier = nn.Linear(hidden_channels, num_classes)
-        self.cached_att = None  # (edge_index_used, att_heads)
+        self.cached_att = None
 
     def forward(self, x, edge_index, edge_weight):
         x1, (ei_used, att_heads) = self.gat1(x, edge_index, return_attention_weights=True)
@@ -158,7 +158,7 @@ features_window = deque(maxlen=WINDOW_SIZE)
 labels_window   = deque(maxlen=WINDOW_SIZE)
 index_window    = deque(maxlen=WINDOW_SIZE)
 
-edge_weight_dict = {}  # (u,v) -> weight
+edge_weight_dict = {}
 
 model = None
 optimizer = None
@@ -178,8 +178,8 @@ hidden_test = []
 
 global_idx = 0
 
-prev_incoming_att = {}   # dict: node_global_id -> dict(neigh_global_id -> prob)
-prev_prob_dict     = {}  # dict: node_global_id -> p_{t-1}
+prev_incoming_att = {}
+prev_prob_dict     = {}
 
 mean_js_prev = 0.0
 mean_js_pos_prev = 0.0
@@ -209,10 +209,10 @@ def attention_heads_node_mean_from_cached_incoming(ei_used, att_heads, num_nodes
 
     in_mean = in_sum / in_cnt.clamp(min=1.0)
     in_mean = (in_mean - in_mean.mean(dim=0, keepdim=True)) / (in_mean.std(dim=0, keepdim=True) + 1e-6)
-    return in_mean  # [N, heads]
+    return in_mean
 
 def refresh_edge_weights_from_cached_att(edge_weight_dict, ei_used, att_heads, ema=EDGE_EW_EMA):
-    att_mean_edge = att_heads.mean(dim=1).detach().cpu().numpy()  # [E]
+    att_mean_edge = att_heads.mean(dim=1).detach().cpu().numpy()
     for k, (u, v) in enumerate(ei_used.t().tolist()):
         old = edge_weight_dict.get((u, v), 1.0)
         if ema is None or ema <= 0.0:
@@ -323,7 +323,7 @@ def compute_attention_drift_vector(curr_incoming, prev_incoming, index_window_li
         g = int(gid[i])
         p_dict = prev_incoming.get(g, {})
         q_dict = curr_incoming.get(g, {})
-        drift[i] = js_divergence_dict(p_dict, q_dict)  # JS ∈ [0, ln2]
+        drift[i] = js_divergence_dict(p_dict, q_dict)
     std = drift.std()
     if std > 1e-9:
         drift = (drift - drift.mean()) / (std + 1e-6)
@@ -617,7 +617,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             curr_incoming_inf = build_incoming_attention_distribution(ei_used, att_heads, idx_win_list)
             drift_vec = compute_attention_drift_vector(curr_incoming_inf, prev_incoming_att, idx_win_list)
 
-            mixed13 = torch.cat([hidden8, head4, drift_vec.view(-1, 1)], dim=1)  # [N, 13]
+            mixed13 = torch.cat([hidden8, head4, drift_vec.view(-1, 1)], dim=1)
             model.cached_att = None
 
             if EXPORT_EMB:
@@ -722,7 +722,7 @@ def safe_show_1d(y, label, title):
     plt.figure(figsize=(8, 3))
     plt.plot(x, y, linewidth=2, label=label)
     plt.xlabel("Window index")
-    # plt.title(title)
+
     plt.legend()
     plt.tight_layout()
     plt.show()
@@ -740,7 +740,7 @@ def safe_show_2d(y1, y2, l1, l2, title):
     plt.plot(x, y1, linewidth=2, label=l1)
     plt.plot(x, y2, linewidth=2, label=l2)
     plt.xlabel("Window index")
-    # plt.title(title)
+
     plt.legend()
     plt.tight_layout()
     plt.show()
@@ -753,7 +753,7 @@ safe_show_1d(log_tau, "tau(t)", "Graph gate tau(t)")
 safe_show_1d(log_edges, "|E|", "Graph sparsity |E|")
 safe_show_1d(log_ent, "H(t)", "Observed attention entropy on used nodes")
 
-# safe_show_2d(log_tau, log_edges, "tau(t)", "|E|", "Graph gate vs sparsity")
+
 
 try:
     emb = np.array(hidden_test, dtype=np.float32)

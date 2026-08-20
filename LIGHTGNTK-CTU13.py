@@ -79,7 +79,7 @@ feat_df = df[feature_cols].apply(
 )
 
 all_idx = np.arange(len(df), dtype=np.int64)
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -132,9 +132,9 @@ print(
 )
 
 
-# ============================================================
-# 2. Graph construction
-# ============================================================
+
+
+
 def safe_corrcoef(x_np):
     if len(x_np) == 0:
         return np.empty((0, 0), dtype=np.float64)
@@ -176,7 +176,7 @@ def build_eval_graph(x_train_np, x_test_np):
     src_parts, dst_parts = [], []
 
     if n_train > 0:
-        # train -> train
+
         tt = np.abs(corr[:n_train, :n_train]) >= CORR_THRESHOLD
         np.fill_diagonal(tt, False)
         s, d = np.where(tt)
@@ -184,7 +184,7 @@ def build_eval_graph(x_train_np, x_test_np):
             src_parts.append(s.astype(np.int64))
             dst_parts.append(d.astype(np.int64))
 
-        # train -> test only
+
         s, test_col = np.where(
             np.abs(corr[:n_train, n_train:]) >= CORR_THRESHOLD
         )
@@ -210,9 +210,9 @@ def build_eval_graph(x_train_np, x_test_np):
         edge_index,
     )
 
-# ============================================================
-# 3. Lightweight GCN backbone
-# ============================================================
+
+
+
 class LiteGCN(nn.Module):
     def __init__(self, in_dim, hidden_dim, num_classes):
         super().__init__()
@@ -236,11 +236,11 @@ class LiteGCN(nn.Module):
             return logits, h
         return logits
 
-# ============================================================
-# 4. Method-specific helpers
-# ============================================================
 
-# Lightweight LightGNTK settings.
+
+
+
+
 GPC_PER_CLASS = 10
 ANCHOR_PER_CLASS = 4
 CANDIDATE_CAP_PER_CLASS = 160
@@ -257,10 +257,6 @@ def _row_normalized_dense_adj(edge_index, n):
 
 @torch.no_grad()
 def light_spectral_sketch(x, edge_index, window_id):
-    """
-    Cheap Bernoulli/landmark low-rank graph sketch.
-    Avoids per-node eigendecomposition in the official node implementation.
-    """
     n, d = x.shape
     A = _row_normalized_dense_adj(edge_index, n)
 
@@ -271,7 +267,7 @@ def light_spectral_sketch(x, edge_index, window_id):
     perm = torch.randperm(n, generator=g, device=DEVICE)[:rank]
     struct = A[:, perm]
 
-    # Fixed random linear association of node features.
+
     gp = torch.Generator(device=DEVICE)
     gp.manual_seed(SEED + 777)
     R = torch.randn(
@@ -286,11 +282,6 @@ def light_spectral_sketch(x, edge_index, window_id):
 
 @torch.no_grad()
 def classifier_gradient_proxy(model, logits, emb, y):
-    """
-    Analytic per-node gradient of the final linear classifier:
-      grad_W = (softmax(logit)-onehot(y)) outer embedding.
-    It is much cheaper than one backward pass per node.
-    """
     p = torch.softmax(logits, dim=1)
     onehot = F.one_hot(y, num_classes=NUM_CLASSES).float()
     residual = p - onehot
@@ -306,11 +297,6 @@ def classifier_gradient_proxy(model, logits, emb, y):
 def select_lightgntk_nodes(
         model, x, edge_index, y, new_mask, window_id
 ):
-    """
-    Official node LightGNTK selects same-class training nodes by distance
-    to validation-gradient representatives. Here we use a tiny internal
-    train-only anchor set and an analytic gradient proxy for speed.
-    """
     model.eval()
     logits, emb = model(x, edge_index, return_embedding=True)
 
@@ -324,7 +310,7 @@ def select_lightgntk_nodes(
     rng = np.random.default_rng(SEED + 5000 + window_id)
     selected_parts = []
 
-    # Prefer old nodes for distilled replay; new nodes are always trained.
+
     old_idx = torch.where(~new_mask)[0]
 
     for cls in range(NUM_CLASSES):
@@ -371,9 +357,9 @@ def select_lightgntk_nodes(
     return torch.empty(0, dtype=torch.long, device=DEVICE)
 
 
-# ============================================================
-# 5. Streaming state
-# ============================================================
+
+
+
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
 index_window = deque(maxlen=WINDOW_SIZE)
@@ -381,7 +367,7 @@ index_window = deque(maxlen=WINDOW_SIZE)
 model = None
 optimizer = None
 
-# Match the earlier CTU13 setup: binary class weighting only.
+
 if NUM_CLASSES == 2:
     train_labels_only = labels[train_idx]
     pos_ratio = (train_labels_only == 1).mean() + 1e-8
@@ -406,9 +392,9 @@ y_prob_test = []
 window_metrics = []
 selection_sizes = []
 
-# ============================================================
-# 6. Streaming training + evaluation
-# ============================================================
+
+
+
 print("\n=== Streaming LightGNTK-Lite ===")
 
 for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
@@ -468,7 +454,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
             weight_decay=WEIGHT_DECAY,
         )
 
-    # Method-specific selection/setup once per window.
+
 
     new_train_mask = torch.tensor(
         new_train_mask_np,
@@ -477,7 +463,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
     )
 
     if first_window:
-        # A tiny warm-up makes the gradient proxy meaningful.
+
         for _warm in range(FIRST_WINDOW_WARMUP_EPOCHS):
             model.train()
             logits_w = model(x_train, edge_train)
@@ -524,9 +510,9 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
         loss.backward()
         optimizer.step()
 
-    # --------------------------------------------------------
-    # Progressive test collection: every hold-out sample once.
-    # --------------------------------------------------------
+
+
+
     eval_test_mask = (
         test_mask_full
         if first_window
@@ -552,9 +538,9 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
         y_pred_test.extend(pred_t.cpu().numpy().tolist())
         y_prob_test.append(probs_t.cpu().numpy())
 
-    # --------------------------------------------------------
-    # Whole-current-window diagnostics.
-    # --------------------------------------------------------
+
+
+
     if test_mask_full.any():
         x_wtest_np = x_win[test_mask_full]
         y_wtest_np = y_win[test_mask_full]
@@ -594,9 +580,9 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="LightGNTK-Lite"):
             ),
         })
 
-# ============================================================
-# 7. Final evaluation
-# ============================================================
+
+
+
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
 y_prob_test = (
@@ -648,7 +634,7 @@ print(
     f"{np.mean(selection_sizes) if selection_sizes else 0:.2f}"
 )
 
-# Confusion matrix
+
 try:
     cm = confusion_matrix(
         y_true_test, y_pred_test, labels=ids
@@ -673,7 +659,7 @@ try:
 except Exception as e:
     print("Confusion matrix failed:", e)
 
-# Multiclass/binary ROC.
+
 try:
     if y_prob_test.shape[0] == len(y_true_test):
         if NUM_CLASSES == 2:
@@ -701,7 +687,7 @@ try:
 except Exception as e:
     print("ROC failed:", e)
 
-# Window-level curve.
+
 if window_metrics:
     wdf = pd.DataFrame(window_metrics)
     print(

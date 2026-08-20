@@ -35,9 +35,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
-# ============================================================
-# 0. Configuration
-# ============================================================
+
+
+
 CSV_PATH = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\iot23_combined_new.csv'
 
 WINDOW_SIZE = 1000
@@ -52,7 +52,7 @@ VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
 SEED = 42
 
-# IoT23 sampling settings.
+
 SAMPLE_FRAC = 0.05
 MANUAL_MINORITY_LABELS = {
     'C&C',
@@ -69,21 +69,21 @@ RARE_LABELS_TO_DROP = {
     'Attack',
 }
 
-# Official GSIP/ERGNN backbone defaults.
+
 HIDDEN_DIM = 256
 LR = 5e-3
 WEIGHT_DECAY = 5e-4
 
-# Replay: bounded class-wise memory for streaming adaptation.
+
 BUFFER_PER_CLASS = 100
 CM_DISTANCE = 0.5
 
-# GSIP similarity thresholds.
+
 NEIBT_LL = 0.99
 
-# Starting values taken from the official CoraFull+GCN GSIP example.
-# IoT23 is not an official GSIP dataset, so these should be treated as
-# baseline starting hyperparameters rather than IoT23-specific optima.
+
+
+
 NEIBT_H = 0.5
 W_LL = 50.0
 W_LG = 0.05
@@ -105,9 +105,9 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
 
-# ============================================================
-# 1. IoT23 loading and preprocessing
-# ============================================================
+
+
+
 def is_unnamed(colname):
     return (
         colname == ''
@@ -138,7 +138,7 @@ def to_float(val):
 
 df = pd.read_csv(CSV_PATH)
 
-# Drop empty/Unnamed first column.
+
 if len(df.columns) > 0 and is_unnamed(df.columns[0]):
     df.drop(
         df.columns[0],
@@ -146,7 +146,7 @@ if len(df.columns) > 0 and is_unnamed(df.columns[0]):
         inplace=True,
     )
 
-# Preserve the original row position before sampling for traceability.
+
 if 'num' not in df.columns:
     df.insert(
         0,
@@ -159,7 +159,7 @@ if 'label' not in df.columns:
         "未找到列名 'label'。请确认 IoT23 CSV 中标签列名为小写 label。"
     )
 
-# Remove the same rare classes as the current IoT23 experiments.
+
 before = len(df)
 
 df = df[
@@ -177,8 +177,8 @@ print(
     f"Rows: {before} -> {after}"
 )
 
-# Keep the two manually specified minority labels intact;
-# sample 5% from every other retained class.
+
+
 print(
     f"Minority (kept intact): "
     f"{sorted(MANUAL_MINORITY_LABELS)}"
@@ -231,7 +231,7 @@ print(
     label_counts_sampled.to_string()
 )
 
-# Stratified splitting needs >=2 samples/class.
+
 too_small = set(
     label_counts_sampled[
         label_counts_sampled < 2
@@ -253,7 +253,7 @@ if too_small:
     )
 
 
-# -------------------- feature groups --------------------
+
 ip_cols = [
     c
     for c in [
@@ -317,7 +317,7 @@ for c in cat_cols:
     )
 
 
-# -------------------- labels --------------------
+
 label_text = (
     df['label']
     .astype(str)
@@ -354,7 +354,7 @@ print(
 )
 
 
-# -------------------- feature matrix --------------------
+
 num_df = (
     df[
         num_cols_raw
@@ -397,7 +397,7 @@ if feat_df.shape[1] == 0:
     )
 
 
-# -------------------- random stratified hold-out --------------------
+
 N_total = len(df)
 
 all_idx = np.arange(
@@ -405,7 +405,7 @@ all_idx = np.arange(
     dtype=np.int64,
 )
 
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -422,7 +422,7 @@ val_idx, test_idx = train_test_split(
     shuffle=True,
 )
 
-# Train-only imputation.
+
 medians = feat_df.iloc[
     train_idx
 ].median(
@@ -433,12 +433,12 @@ feat_df = feat_df.fillna(
     medians
 )
 
-# Keep a final safe fallback for any all-NaN feature column.
+
 feat_df = feat_df.fillna(
     0.0
 )
 
-# Train-only standardization.
+
 scaler = StandardScaler(
     with_mean=True,
     with_std=True,
@@ -552,9 +552,9 @@ print(
 )
 
 
-# ============================================================
-# 2. Pearson graph construction
-# ============================================================
+
+
+
 def safe_row_corrcoef(
     x_np: np.ndarray,
 ) -> np.ndarray:
@@ -583,12 +583,6 @@ def safe_row_corrcoef(
 def build_train_graph(
     x_train_np: np.ndarray,
 ):
-    """
-    Graph contains only current-window TRAIN nodes.
-
-    Pearson determines connectivity.
-    GCNConv adds self-loops internally.
-    """
     n = x_train_np.shape[0]
 
     if n <= 1:
@@ -628,20 +622,6 @@ def build_inductive_eval_graph(
     x_train_np: np.ndarray,
     x_test_np: np.ndarray,
 ):
-    """
-    Node order:
-      [current-window training context, test nodes]
-
-    Allowed:
-      train -> train
-      train -> test
-
-    Self-loops are added internally by GCNConv.
-
-    Forbidden:
-      test -> train
-      test -> test
-    """
     n_train = x_train_np.shape[0]
     n_test = x_test_np.shape[0]
 
@@ -688,8 +668,8 @@ def build_inductive_eval_graph(
                 dst_tt.astype(np.int64)
             )
 
-        # train -> test.
-        # corr[:n_train, n_train:] rows=train, cols=test.
+
+
         corr_train_test = corr[
             :n_train,
             n_train:
@@ -739,13 +719,10 @@ def build_inductive_eval_graph(
     )
 
 
-# ============================================================
-# 3. GCN backbone
-# ============================================================
+
+
+
 class GSIPGCN(nn.Module):
-    """
-    Two-layer GCN with 256-d hidden representation.
-    """
     def __init__(
         self,
         in_channels,
@@ -790,22 +767,10 @@ class GSIPGCN(nn.Module):
         return logits, hidden
 
 
-# ============================================================
-# 4. ERGNN-style CM replay buffer
-# ============================================================
+
+
+
 class ClassBalancedCMBuffer:
-    """
-    Bounded class-wise replay memory.
-
-    CM follows the official ERGNN sampler logic:
-    for samples of one class, count how many samples of other classes lie
-    within distance d and rank samples by that count in ascending order.
-
-    Because the original GSIP protocol receives discrete class tasks and
-    extends memory per task, while IoT23 receives endless windows with a fixed
-    classes, this adaptation re-selects a fixed budget per class from:
-        previous buffer + newly arrived training samples.
-    """
     def __init__(
         self,
         per_class_budget,
@@ -938,17 +903,13 @@ class ClassBalancedCMBuffer:
         ]
 
 
-# ============================================================
-# 5. Loss helpers
-# ============================================================
+
+
+
 def balanced_ce(
     logits,
     y,
 ):
-    """
-    Per-batch inverse-frequency class weighting, following the official
-    GSIP/ERGNN implementation's class balancing.
-    """
     if y.numel() == 0:
         return None
 
@@ -982,14 +943,6 @@ def gsip_losses(
     old_logits,
     replay_labels,
 ):
-    """
-    Returns:
-      loss_ll : low-frequency local preservation
-      loss_lg : low-frequency global preservation
-      loss_h  : high-frequency preservation
-
-    This follows the official ERGNN+GSIP code structure.
-    """
     device = new_logits.device
     zero = torch.zeros(
         (),
@@ -1002,16 +955,16 @@ def gsip_losses(
 
     old_detached = old_logits.detach()
 
-    # Old-model pair similarity.
+
     sim_old = F.cosine_similarity(
         old_detached.unsqueeze(1),
         old_detached.unsqueeze(0),
         dim=2,
     )
 
-    # --------------------------------------------------------
-    # Low-frequency local preservation
-    # --------------------------------------------------------
+
+
+
     same_label = torch.eq(
         replay_labels.unsqueeze(1),
         replay_labels.unsqueeze(0),
@@ -1044,9 +997,9 @@ def gsip_losses(
     else:
         loss_ll = zero
 
-    # --------------------------------------------------------
-    # Low-frequency global preservation
-    # --------------------------------------------------------
+
+
+
     if W_LG != 0.0:
         loss_lg = F.mse_loss(
             new_logits.mean(
@@ -1059,9 +1012,9 @@ def gsip_losses(
     else:
         loss_lg = zero
 
-    # --------------------------------------------------------
-    # High-frequency preservation
-    # --------------------------------------------------------
+
+
+
     high_mask = (
         sim_old > NEIBT_H
     )
@@ -1111,9 +1064,9 @@ def gsip_losses(
     )
 
 
-# ============================================================
-# 6. Streaming state
-# ============================================================
+
+
+
 features_window = deque(
     maxlen=WINDOW_SIZE
 )
@@ -1136,13 +1089,13 @@ replay_buffer = ClassBalancedCMBuffer(
 global_idx = 0
 session_idx = 0
 
-# Final progressive hold-out collection.
+
 y_true_test = []
 y_pred_test = []
 y_prob_test_all = []
 hidden_test = []
 
-# Window-level performance curve.
+
 window_perf_ids = []
 window_perf_n_test = []
 window_perf_accuracy = []
@@ -1150,15 +1103,15 @@ window_perf_precision = []
 window_perf_recall = []
 window_perf_f1 = []
 
-# GSIP diagnostics.
+
 gsip_ll_values = []
 gsip_lg_values = []
 gsip_h_values = []
 
 
-# ============================================================
-# 7. Main streaming loop
-# ============================================================
+
+
+
 print("\n=== Streaming GSIP Training ===")
 
 for start in tqdm(
@@ -1221,7 +1174,7 @@ for start in tqdm(
         dtype=np.int64,
     )
 
-    # Newly arrived positions.
+
     new_mask_full = np.zeros(
         len(x_win_np),
         dtype=bool,
@@ -1242,9 +1195,9 @@ for start in tqdm(
         idx_win_np
     ]
 
-    # --------------------------------------------------------
-    # 7.1 Current training graph
-    # --------------------------------------------------------
+
+
+
     x_train_np = x_win_np[
         train_mask_full
     ]
@@ -1304,7 +1257,7 @@ for start in tqdm(
         prev_model = None
 
     else:
-        # Freeze the previous-session model before the current update.
+
         prev_model = copy.deepcopy(
             model
         ).to(DEVICE)
@@ -1329,7 +1282,7 @@ for start in tqdm(
 
         epochs_now = EPOCHS_INC
 
-    # Historical replay graph is fixed during this session.
+
     old_buffer_ids = replay_buffer.get_ids()
 
     if len(old_buffer_ids) > 0:
@@ -1377,9 +1330,9 @@ for start in tqdm(
         replay_edge_index = None
         old_replay_logits = None
 
-    # --------------------------------------------------------
-    # 7.2 Current session optimization
-    # --------------------------------------------------------
+
+
+
     for _ in range(epochs_now):
         if used_idx is None:
             break
@@ -1488,9 +1441,9 @@ for start in tqdm(
         total_loss.backward()
         optimizer.step()
 
-    # --------------------------------------------------------
-    # 7.3 Progressive hold-out evaluation
-    # --------------------------------------------------------
+
+
+
     if first_window:
         eval_test_mask_full = (
             test_mask_full
@@ -1573,9 +1526,9 @@ for start in tqdm(
             .tolist()
         )
 
-    # --------------------------------------------------------
-    # 7.4 Whole-current-window performance curve
-    # --------------------------------------------------------
+
+
+
     if test_mask_full.any():
         x_curve_test_np = x_win_np[
             test_mask_full
@@ -1665,9 +1618,9 @@ for start in tqdm(
             )
         )
 
-    # --------------------------------------------------------
-    # 7.5 Update replay memory AFTER the current session
-    # --------------------------------------------------------
+
+
+
     if first_window:
         new_train_global_ids = (
             train_global_ids
@@ -1692,9 +1645,9 @@ if model is None:
     )
 
 
-# ============================================================
-# 8. GSIP diagnostics
-# ============================================================
+
+
+
 print("\n=== GSIP Diagnostics ===")
 print(
     f"Continual sessions: "
@@ -1714,9 +1667,9 @@ if gsip_ll_values:
     )
 
 
-# ============================================================
-# 9. Window-level Performance Curve
-# ============================================================
+
+
+
 if len(window_perf_ids) > 0:
     print(
         "\n=== Window-level Performance Diagnostics ==="
@@ -1803,9 +1756,9 @@ if len(window_perf_ids) > 0:
     )
 
 
-# ============================================================
-# 10. Final progressive hold-out evaluation
-# ============================================================
+
+
+
 y_true_test = np.asarray(
     y_true_test,
     dtype=np.int64,
@@ -1901,9 +1854,9 @@ for k in [
     )
 
 
-# ============================================================
-# 11. Confusion matrix
-# ============================================================
+
+
+
 try:
     cm = confusion_matrix(
         y_true_test,
@@ -1948,9 +1901,9 @@ except Exception as e:
     )
 
 
-# ============================================================
-# 12. ROC
-# ============================================================
+
+
+
 try:
     if (
         y_prob_test_all.shape[0]
@@ -2108,9 +2061,9 @@ except Exception as e:
     )
 
 
-# ============================================================
-# 13. t-SNE of test hidden representations
-# ============================================================
+
+
+
 try:
     hidden_np = np.asarray(
         hidden_test,

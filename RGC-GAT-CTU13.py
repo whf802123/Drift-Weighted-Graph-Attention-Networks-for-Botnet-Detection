@@ -88,7 +88,7 @@ feat_df = df[feature_cols].apply(pd.to_numeric, errors='coerce')
 
 N_total = len(df)
 all_idx = np.arange(N_total)
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,

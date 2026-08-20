@@ -43,7 +43,7 @@ VALIDATION_RATIO = 0.15
 TEST_RATIO       = 0.15
 SEED = 42
 
-# IoT23 sampling.
+
 SAMPLE_FRAC = 0.05
 MANUAL_MINORITY_LABELS = {
     'C&C',
@@ -67,7 +67,7 @@ EDGE_DROP_P = 0.20
 INIT_NUM_CLUSTERS = 5
 BETA = 0.01
 VARIANCE_THRESHOLD = 0.10
-COMPACTNESS_THRESHOLD_MODE = "avg"   # "avg" or "28"
+COMPACTNESS_THRESHOLD_MODE = "avg"
 MEMORY_RETENTION_THRESHOLD = 0.80
 
 MAX_SPACED_MEMORY_CHECK = 10
@@ -85,9 +85,9 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
 
-# ============================================================
-# 1. IoT23 preprocessing
-# ============================================================
+
+
+
 def is_unnamed(colname):
     return (
         colname == ''
@@ -121,13 +121,13 @@ df = pd.read_csv(CSV_PATH)
 if len(df.columns) > 0 and is_unnamed(df.columns[0]):
     df.drop(df.columns[0], axis=1, inplace=True)
 
-# Preserve stream order while sampling.
+
 df['_stream_order_'] = np.arange(len(df), dtype=np.int64)
 
 if 'label' not in df.columns:
     raise KeyError("未找到小写 label 列。")
 
-# Drop the same rare labels as the current IoT23 setup.
+
 df = df[
     ~df['label'].isin(RARE_LABELS_TO_DROP)
 ].copy()
@@ -154,7 +154,7 @@ df.drop(columns=['_stream_order_'], inplace=True)
 
 label_counts = df['label'].astype(str).value_counts()
 
-# Stratified split requires at least two samples in every retained class.
+
 too_small = set(
     label_counts[
         label_counts < 2
@@ -169,7 +169,7 @@ if too_small:
         ~df['label'].isin(too_small)
     ].reset_index(drop=True)
 
-# Feature groups used in the current IoT23 pipeline.
+
 ip_cols = [
     c for c in [
         'id.orig_h',
@@ -220,7 +220,7 @@ for c in cat_cols:
         .replace({'nan': '-'})
     )
 
-# Multiclass labels.
+
 label_text = df['label'].astype(str).values
 unique_labels_text = pd.unique(label_text)
 
@@ -238,7 +238,7 @@ labels = np.asarray(
     dtype=np.int64,
 )
 
-# Numeric + one-hot categorical features.
+
 num_df = (
     df[num_cols_raw + ip_cols].copy()
     if (num_cols_raw or ip_cols)
@@ -265,7 +265,7 @@ if feat_df.shape[1] == 0:
 
 all_idx = np.arange(len(df), dtype=np.int64)
 
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -282,7 +282,7 @@ val_idx, test_idx = train_test_split(
     shuffle=True,
 )
 
-# Train-only imputation / scaling.
+
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians).fillna(0.0)
 
@@ -329,9 +329,9 @@ print(
 print(f"Classes: {NUM_CLASSES}")
 print(f"Features: {features.shape[1]}")
 print(f"Pearson threshold: {CORR_THRESHOLD}")
-# ============================================================
-# 2. Graph utilities
-# ============================================================
+
+
+
 def safe_corr(x_np):
     if len(x_np) == 0:
         return np.empty((0, 0), dtype=np.float64)
@@ -361,7 +361,7 @@ def build_eval_graph(x_train_np, x_test_np):
     src_parts, dst_parts = [], []
 
     if n_train > 0:
-        # train -> train
+
         adj_tt = np.abs(corr[:n_train, :n_train]) >= CORR_THRESHOLD
         np.fill_diagonal(adj_tt, False)
         s, d = np.where(adj_tt)
@@ -369,7 +369,7 @@ def build_eval_graph(x_train_np, x_test_np):
             src_parts.append(s.astype(np.int64))
             dst_parts.append(d.astype(np.int64))
 
-        # train -> test only
+
         s, test_col = np.where(
             np.abs(corr[:n_train, n_train:]) >= CORR_THRESHOLD
         )
@@ -391,9 +391,9 @@ def build_eval_graph(x_train_np, x_test_np):
     )
 
 
-# ============================================================
-# 3. TRACE augmentation + encoder
-# ============================================================
+
+
+
 def mask_features(x, p):
     if p <= 0:
         return x
@@ -450,9 +450,9 @@ def cos_matrix(a, b):
     return a @ b.T
 
 
-# ============================================================
-# 4. Progressive clustering node proxies
-# ============================================================
+
+
+
 def cluster_once(embs, ids, k):
     ids = np.asarray(ids, dtype=np.int64)
     k = max(1, min(int(k), len(ids)))
@@ -529,9 +529,9 @@ def progressive_clustering(embs, ids, k, depth=0):
     return list(dict.fromkeys(int(x) for x in result))
 
 
-# ============================================================
-# 5. Proxy memory
-# ============================================================
+
+
+
 class ProxyMemory:
     def __init__(self, x, edge_index, novelty):
         self.x = x.detach().cpu()
@@ -573,9 +573,9 @@ def retention(encoder, memory):
     return round(now / max(abs(memory.novelty), 1e-8), 2)
 
 
-# ============================================================
-# 6. Fast / slow learning
-# ============================================================
+
+
+
 def train_fast(x, edge_index, in_dim):
     enc = TraceGCN(in_dim).to(DEVICE)
     opt = torch.optim.AdamW(enc.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
@@ -636,9 +636,9 @@ def load_reference(state, in_dim):
     return m
 
 
-# ============================================================
-# 7. Linear probe
-# ============================================================
+
+
+
 def fit_probe(train_emb, train_y):
     classes = np.unique(train_y)
     if len(classes) < 2:
@@ -669,9 +669,9 @@ def probe_predict(probe, emb):
     return pred, prob
 
 
-# ============================================================
-# 8. Streaming state
-# ============================================================
+
+
+
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
 index_window = deque(maxlen=WINDOW_SIZE)
@@ -693,9 +693,9 @@ window_ids, window_acc, window_p, window_r, window_f1 = [], [], [], [], []
 proxy_counts, spaced_counts = [], []
 
 
-# ============================================================
-# 9. Main loop
-# ============================================================
+
+
+
 print("\n=== Streaming TRACE Training ===")
 
 for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
@@ -737,12 +737,12 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
     train_edges = build_train_graph(x_train)
     in_dim = x_train_t.size(1)
 
-    # ---------- fast learning + proxy selection ----------
+
     fast_encoder, fast_emb = train_fast(x_train_t, train_edges, in_dim)
     cur_px, cur_pe, cur_proxy_ids = select_current_proxies(x_train, fast_emb)
     proxy_counts.append(len(cur_proxy_ids))
 
-    # ---------- slow encoder ----------
+
     if first_window:
         slow_encoder = TraceGCN(in_dim).to(DEVICE)
         slow_encoder.load_state_dict(fast_encoder.state_dict())
@@ -758,7 +758,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
             p.requires_grad_(False)
         slow_epochs = SLOW_EPOCHS_INC
 
-    # ---------- adaptive spaced replay trigger ----------
+
     spaced_ids = []
     if not first_window and len(proxy_memories) >= 2:
         start_j = max(0, len(proxy_memories) - 1 - MAX_SPACED_MEMORY_CHECK)
@@ -773,7 +773,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
 
     spaced_counts.append(len(spaced_ids))
 
-    # ---------- slow learning ----------
+
     for _ in range(slow_epochs):
         slow_encoder.train()
 
@@ -783,7 +783,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
             slow_encoder(xb, eb)
         )
 
-        # Most recent proxy relation is always preserved.
+
         if previous_encoder is not None and proxy_memories:
             last_x, last_e = proxy_memories[-1].tensors()
             loss += BETA * relation_loss(
@@ -793,7 +793,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
                 (last_x, last_e)
             )
 
-        # Older proxy memories are replayed only when retention degrades/shifts.
+
         for j in spaced_ids:
             ref = load_reference(historical_states[j], in_dim)
             old_x, old_e = proxy_memories[j].tensors()
@@ -813,20 +813,20 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
         loss.backward()
         slow_optimizer.step()
 
-    # ---------- save proxy memory ----------
+
     cur_novelty = novelty(slow_encoder, cur_px, cur_pe)
     proxy_memories.append(ProxyMemory(cur_px, cur_pe, cur_novelty))
     historical_states.append(cpu_state(slow_encoder))
     memory_retention.append(1.0)
 
-    # ---------- current-window linear probe ----------
+
     slow_encoder.eval()
     with torch.no_grad():
         train_emb = slow_encoder(x_train_t, train_edges).cpu().numpy()
 
     probe = fit_probe(train_emb, y_train)
 
-    # ---------- progressive hold-out evaluation ----------
+
     eval_test_mask = test_mask if first_window else (new_mask & test_mask)
 
     if eval_test_mask.any():
@@ -846,7 +846,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
         y_prob_test_all.append(prob)
         hidden_test.extend(test_emb.tolist())
 
-    # ---------- whole-window performance curve ----------
+
     if test_mask.any():
         x_test_window = x_win[test_mask]
         y_test_window = y_win[test_mask]
@@ -888,9 +888,9 @@ if slow_encoder is None:
     raise RuntimeError("模型未初始化，请检查 WINDOW_SIZE。")
 
 
-# ============================================================
-# 10. Diagnostics + Window-level curve
-# ============================================================
+
+
+
 print("\n=== TRACE Diagnostics ===")
 print(f"Sessions: {session_idx}")
 print(f"Stored proxy memories: {len(proxy_memories)}")
@@ -922,9 +922,9 @@ if window_ids:
     plt.close(fig)
 
 
-# ============================================================
-# 11. Final hold-out report
-# ============================================================
+
+
+
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
 y_prob_test_all = (
@@ -966,9 +966,9 @@ for k in ["macro avg", "weighted avg"]:
     )
 
 
-# ============================================================
-# 12. Confusion matrix
-# ============================================================
+
+
+
 try:
     cm = confusion_matrix(
         y_true_test, y_pred_test, labels=np.arange(NUM_CLASSES)
@@ -984,9 +984,9 @@ except Exception as e:
     print("Confusion matrix failed:", e)
 
 
-# ============================================================
-# 13. ROC
-# ============================================================
+
+
+
 try:
     if (
         y_prob_test_all.shape[0] == len(y_true_test)
@@ -1064,9 +1064,9 @@ except Exception as e:
     print("ROC failed:", e)
 
 
-# ============================================================
-# 14. t-SNE
-# ============================================================
+
+
+
 try:
     h = np.asarray(hidden_test, dtype=np.float64)
     if len(h) > 10:

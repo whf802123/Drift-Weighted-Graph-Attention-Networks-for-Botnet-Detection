@@ -39,8 +39,8 @@ WEIGHT_DECAY     = 0.0
 EXPORT_EMB       = True
 EMB_CSV_PATH     = 'all_embeddings_12d_dwgatv2_iot23.csv'
 
-DF_FRAC     = 0.05   # Part
-MAX_WINDOWS = None     #
+DF_FRAC     = 0.05
+MAX_WINDOWS = None
 
 USE_DRIFT_CONTROLLER = True
 
@@ -173,7 +173,7 @@ feat_df = pd.concat([num_df, cat_df], axis=1)
 
 N_total = len(df)
 all_idx = np.arange(N_total)
-# Stratified 70/15/15 train/validation/test split.
+
 train_idx, holdout_idx = train_test_split(
     all_idx,
     test_size=VALIDATION_RATIO + TEST_RATIO,
@@ -231,13 +231,13 @@ features_window = deque(maxlen=WINDOW_SIZE)
 labels_window   = deque(maxlen=WINDOW_SIZE)
 index_window    = deque(maxlen=WINDOW_SIZE)
 
-edge_weight_dict = {}  # (u,v) -> weight
+edge_weight_dict = {}
 
 model = None
 optimizer = None
 criterion = None
 
-# embeddings & eval collection
+
 all_embeddings, all_labels, all_indices = [], [], []
 first_window_committed = False
 
@@ -247,8 +247,8 @@ y_prob_test_all = []
 
 global_idx = 0
 
-# ===== Drift v2 caches =====
-prev_incoming_att = {}   # node_global -> {neigh_global: prob}
+
+prev_incoming_att = {}
 mean_js_prev = 0.0
 mean_js_attack_prev = 0.0
 
@@ -263,7 +263,7 @@ def build_all_edges_and_weights():
     return ei, ew
 
 def refresh_edge_weights_from_cached_att(edge_weight_dict, ei_used, att_heads, ema=EDGE_EW_EMA):
-    att_mean_edge = att_heads.mean(dim=1).detach().cpu().numpy()  # [E]
+    att_mean_edge = att_heads.mean(dim=1).detach().cpu().numpy()
     for k, (u, v) in enumerate(ei_used.t().tolist()):
         old = edge_weight_dict.get((u, v), 1.0)
         edge_weight_dict[(u, v)] = float((1.0 - ema) * old + ema * att_mean_edge[k])
@@ -280,7 +280,7 @@ def attention_heads_node_mean_from_cached_incoming(ei_used, att_heads, num_nodes
     in_cnt.index_add_(0, dst, ones_e.unsqueeze(-1))
     in_mean = in_sum / in_cnt.clamp(min=1.0)
     in_mean = (in_mean - in_mean.mean(dim=0, keepdim=True)) / (in_mean.std(dim=0, keepdim=True) + 1e-6)
-    return in_mean  # [N, heads]
+    return in_mean
 
 def sparse_entropy_loss_sum_heads(ei_used, att_heads, num_nodes, heads, nodes_mask=None, eps=1e-12):
     dst = ei_used[1]
@@ -302,9 +302,6 @@ def sparse_entropy_loss_sum_heads(ei_used, att_heads, num_nodes, heads, nodes_ma
     return norm_entropy.mean()
 
 def build_incoming_attention_distribution(ei_used, att_heads, index_window_list, eps=1e-12):
-    """
-    dict[v_global][u_global] = prob
-    """
     att_mean_edge = att_heads.mean(dim=1).clamp_min(eps)
     ei_np = ei_used.detach().cpu().numpy()
     src_loc = ei_np[0]; dst_loc = ei_np[1]
@@ -395,7 +392,7 @@ def compute_loss_with_replay_and_weight(logits, y_win, idx_np, r_t, w_update):
 
     idx_used = torch.where(final_mask)[0]
 
-    # replay
+
     old_mask = train_mask & (~new_mask)
     if old_mask.any():
         old_idx = torch.where(old_mask)[0]
@@ -447,7 +444,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         log_edges.append(int(len(rows)))
 
     if model is None:
-        # init edges with 1.0 (bidirectional)
+
         src = np.concatenate([rows, cols])
         dst = np.concatenate([cols, rows])
         edge_weight_dict.clear()
@@ -464,7 +461,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
         criterion = nn.CrossEntropyLoss()
 
-        # first window training
+
         for _ in range(GAT_EPOCHS_FIRST):
             model.train()
             ei, ew = build_all_edges_and_weights()
@@ -475,7 +472,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             y_win  = torch.tensor(list(labels_window), dtype=torch.long, device=DEVICE)
             idx_np = np.array(index_window)
 
-            # attention drift stats (one pass)
+
             ei_used, att_heads = model.cached_att
             curr_incoming = build_incoming_attention_distribution(ei_used, att_heads, list(index_window))
             mean_js, mean_js_attack = compute_window_drift_stats(
@@ -487,12 +484,12 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             else:
                 w_update, r_t, H_star = 1.0, REPLAY0, H0
 
-            # CE + replay + weight
+
             ce_w, used_idx = compute_loss_with_replay_and_weight(logits, y_win, idx_np, r_t, w_update)
             if ce_w is None:
                 continue
 
-            # entropy gap regularization: |H - H*|^2 on used nodes
+
             nodes_mask = torch.zeros(WINDOW_SIZE, dtype=torch.bool, device=DEVICE)
             nodes_mask[used_idx] = True
             ent = sparse_entropy_loss_sum_heads(ei_used, att_heads, num_nodes=x_tensor.size(0), heads=ATTN_HEADS, nodes_mask=nodes_mask)
@@ -504,7 +501,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             loss.backward()
             optimizer.step()
 
-            # logs
+
             mean_js_prev = mean_js
             mean_js_attack_prev = mean_js_attack
 
@@ -515,7 +512,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
                 log_r.append(float(r_t))
                 log_ent.append(float(ent.detach().cpu().item()))
 
-        # refresh edge weights (EMA)
+
         model.eval()
         with torch.no_grad():
             ei, ew = build_all_edges_and_weights()
@@ -523,11 +520,11 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             ei_used2, att_heads2 = model.cached_att
             refresh_edge_weights_from_cached_att(edge_weight_dict, ei_used2, att_heads2, ema=EDGE_EW_EMA)
 
-        # update prev attention baseline (after training)
+
         prev_incoming_att = build_incoming_attention_distribution(ei_used2, att_heads2, list(index_window))
 
     else:
-        # incremental: only add new edges
+
         new_start = WINDOW_SIZE - BATCH_SIZE
         mask = ((rows >= new_start) | (cols >= new_start))
         rows_inc, cols_inc = rows[mask], cols[mask]
@@ -548,7 +545,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             y_win  = torch.tensor(list(labels_window), dtype=torch.long, device=DEVICE)
             idx_np = np.array(index_window)
 
-            # drift stats
+
             ei_used, att_heads = model.cached_att
             curr_incoming = build_incoming_attention_distribution(ei_used, att_heads, list(index_window))
             mean_js, mean_js_attack = compute_window_drift_stats(
@@ -585,7 +582,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
                 log_r.append(float(r_t))
                 log_ent.append(float(ent.detach().cpu().item()))
 
-        # refresh edge weights
+
         model.eval()
         with torch.no_grad():
             ei, ew = build_all_edges_and_weights()
@@ -595,7 +592,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
 
         prev_incoming_att = build_incoming_attention_distribution(ei_used2, att_heads2, list(index_window))
 
-    # ===== inference & embedding export =====
+
     model.eval()
     with torch.no_grad():
         ei, ew = build_all_edges_and_weights()
@@ -603,13 +600,13 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             continue
 
         logits, hidden8 = model(x_tensor, ei, ew)
-        probs_all = torch.softmax(logits, dim=1).detach().cpu().numpy()  # [W, K]
+        probs_all = torch.softmax(logits, dim=1).detach().cpu().numpy()
 
         ei_used, att_heads = model.cached_att
         head4 = attention_heads_node_mean_from_cached_incoming(
             ei_used, att_heads, num_nodes=x_tensor.size(0), heads=ATTN_HEADS
         )
-        mixed12 = torch.cat([hidden8, head4], dim=1)  # 12-d
+        mixed12 = torch.cat([hidden8, head4], dim=1)
         model.cached_att = None
 
         if EXPORT_EMB:
@@ -625,7 +622,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
                 all_labels.extend(list(labels_window)[new_slice])
                 all_indices.extend(list(index_window)[new_slice])
 
-        # eval slice: only new entering test nodes
+
         take = min(BATCH_SIZE, WINDOW_SIZE)
         new_mask = np.zeros(WINDOW_SIZE, dtype=bool)
         new_mask[-take:] = True
@@ -639,11 +636,11 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             hidden_test.extend(mixed12[final_mask].detach().cpu().numpy().tolist())
             y_prob_test_all.append(probs_all[final_mask])
 
-# Evaluation 
+
 y_true_test = np.array(y_true_test)
 y_pred_test = np.array(y_pred_test)
 if len(y_prob_test_all) > 0:
-    y_prob_test_all = np.vstack(y_prob_test_all)  # [N_test_slice, K]
+    y_prob_test_all = np.vstack(y_prob_test_all)
 else:
     y_prob_test_all = np.empty((0, num_classes))
 
@@ -669,7 +666,7 @@ else:
         print(f"{k:<28} precision: {m['precision']*100:.2f}%  "
               f"recall: {m['recall']*100:.2f}%  f1-score: {m['f1-score']*100:.2f}%")
 
-    # Confusion Matrix
+
     try:
         labels_order = unique_ids.tolist()
         display_names = [id_to_label[i] for i in labels_order]
@@ -684,7 +681,7 @@ else:
     except Exception as e:
         print("Confusion Matrix Error", e)
 
-    # Multi-class ROC (OvR)
+
     try:
         if num_classes > 2 and y_prob_test_all.shape[0] > 0:
             classes_sorted = np.unique(labels).tolist()
@@ -735,7 +732,7 @@ def safe_show_1d(y, label, title):
     plt.figure(figsize=(8, 3))
     plt.plot(x, y, label=label)
     plt.xlabel("Window index")
-    # plt.title(title)
+
     plt.legend()
     plt.tight_layout()
     plt.show()
@@ -752,7 +749,7 @@ def safe_show_2d(y1, y2, l1, l2, title):
     plt.plot(x, y1, label=l1)
     plt.plot(x, y2, label=l2)
     plt.xlabel("Window index")
-    # plt.title(title)
+
     plt.legend()
     plt.tight_layout()
     plt.show()
@@ -762,7 +759,7 @@ if LOG_SIGNALS:
     safe_show_1d(log_mean_js_attack, "mean_js_attack", "Drift signal: mean_js_attack (non-majority classes)")
     safe_show_1d(log_w, "w(t)", "Controller: learning pressure w(t)")
     safe_show_1d(log_r, "r(t)", "Controller: replay ratio r(t)")
-    # safe_show_2d(log_tau, log_edges, "tau(t)", "|E|", "Controller: tau(t) and graph sparsity |E|")
+
 
     safe_show_1d(log_tau, "tau(t)", "Controller: adaptive correlation threshold tau(t)")
     safe_show_1d(log_edges, "|E|", "Graph sparsity: number of edges |E|")
