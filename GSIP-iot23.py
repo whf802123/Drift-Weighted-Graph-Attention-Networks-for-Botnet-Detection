@@ -156,7 +156,7 @@ if 'num' not in df.columns:
 
 if 'label' not in df.columns:
     raise KeyError(
-        "未找到列名 'label'。请确认 IoT23 CSV 中标签列名为小写 label。"
+        "Column 'label' was not found. Ensure that the label column in the IoT23 CSV is named 'label' in lowercase."
     )
 
 
@@ -393,7 +393,7 @@ feat_df = pd.concat(
 
 if feat_df.shape[1] == 0:
     raise RuntimeError(
-        "未能构建任何特征列，请检查输入 CSV。"
+        "No feature columns could be constructed. Check the input CSV."
     )
 
 
@@ -517,7 +517,7 @@ if NUM_CLASSES != len(
     )
 ):
     raise RuntimeError(
-        "训练集未包含全部类别，无法进行当前多分类设置。"
+        "The training set does not contain all classes; the current multiclass configuration cannot be used."
     )
 
 print(
@@ -1641,7 +1641,7 @@ for start in tqdm(
 
 if model is None:
     raise RuntimeError(
-        "模型未初始化。请检查 WINDOW_SIZE 是否小于有效数据量。"
+        "The model was not initialized. Ensure WINDOW_SIZE is smaller than the number of valid samples."
     )
 
 
@@ -1795,7 +1795,7 @@ print(
 
 if len(y_true_test) == 0:
     raise RuntimeError(
-        "测试集为空或没有测试样本被评估。"
+        "The test set is empty or no test samples were evaluated."
     )
 
 unique_ids = np.arange(
@@ -1896,9 +1896,10 @@ try:
 
 except Exception as e:
     print(
-        "绘制混淆矩阵出错：",
+        "Error plotting the confusion matrix:",
         e,
     )
+
 
 
 
@@ -2056,7 +2057,7 @@ try:
 
 except Exception as e:
     print(
-        "ROC 计算/绘制出错：",
+        "Error computing or plotting ROC curves:",
         e,
     )
 
@@ -2234,12 +2235,11 @@ try:
 
     else:
         print(
-            "t-SNE: 测试隐藏向量过少，跳过可视化。"
+            "t-SNE: Too few test hidden vectors; skipping visualization."
         )
 
 except Exception as e:
     print(
-        "t-SNE 可视化失败：",
+        "t-SNE visualization failed:",
         e,
     )
-

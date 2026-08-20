@@ -64,17 +64,17 @@ if torch.cuda.is_available():
 df = pd.read_csv(CSV_PATH)
 
 if "Label" not in df.columns:
-    raise KeyError("未找到列名 'Label'。请确认 CTU13 CSV 中标签列名为 Label。")
+    raise KeyError("Column 'Label' was not found. Ensure that the label column in the CTU13 CSV is named 'Label'.")
 
 feature_cols = [c for c in df.columns if c not in ("num", "Label")]
 if len(feature_cols) == 0:
-    raise RuntimeError("未找到可用特征列。")
+    raise RuntimeError("No usable feature columns were found.")
 
 labels = df["Label"].astype(int).to_numpy(dtype=np.int64)
 unique_labels = np.unique(labels)
 if len(unique_labels) != 2 or set(unique_labels.tolist()) != {0, 1}:
     raise RuntimeError(
-        f"当前代码按 CTU13 二分类 0/1 设置，实际标签为 {unique_labels.tolist()}。"
+        f"This code expects binary CTU13 labels 0/1; actual labels: {unique_labels.tolist()}."
     )
 
 id_to_label = {0: "Normal", 1: "Botnet"}
@@ -133,7 +133,7 @@ print(
 
 NUM_CLASSES = len(np.unique(labels[train_idx]))
 if NUM_CLASSES != 2:
-    raise RuntimeError("训练集未同时包含 Normal 和 Botnet 两类。")
+    raise RuntimeError("The training set does not contain both Normal and Botnet classes.")
 
 print("Device:", DEVICE)
 print("CTU13 label mapping:", id_to_label)
@@ -555,7 +555,7 @@ for start in tqdm(
 
 if model is None:
     raise RuntimeError(
-        "模型未初始化。请检查 WINDOW_SIZE 是否小于有效数据量。"
+        "The model was not initialized. Ensure WINDOW_SIZE is smaller than the number of valid samples."
     )
 
 
@@ -591,7 +591,7 @@ if len(y_true_test) != len(test_idx):
     )
 
 if len(y_true_test) == 0:
-    raise RuntimeError("测试集为空或没有测试样本被评估。")
+    raise RuntimeError("The test set is empty or no test samples were evaluated.")
 
 unique_ids = np.arange(NUM_CLASSES)
 target_names = [id_to_label[i] for i in unique_ids]
@@ -655,7 +655,7 @@ try:
     plt.show()
     plt.close(fig_cm)
 except Exception as e:
-    print("绘制混淆矩阵出错：", e)
+    print("Error plotting the confusion matrix:", e)
 
 
 
@@ -685,7 +685,7 @@ try:
 
         print(f"ROC-AUC: {roc_auc * 100:.2f}%")
 except Exception as e:
-    print("ROC 计算/绘制出错：", e)
+    print("Error computing or plotting ROC curves:", e)
 
 
 
@@ -763,7 +763,7 @@ try:
         plt.show()
         plt.close(fig_tsne)
     else:
-        print("t-SNE: 测试隐藏向量过少，跳过可视化。")
+        print("t-SNE: Too few test hidden vectors; skipping visualization.")
 except Exception as e:
-    print("t-SNE 可视化失败：", e)
+    print("t-SNE visualization failed:", e)
     

@@ -125,7 +125,7 @@ if len(df.columns) > 0 and is_unnamed(df.columns[0]):
 df['_stream_order_'] = np.arange(len(df), dtype=np.int64)
 
 if 'label' not in df.columns:
-    raise KeyError("未找到小写 label 列。")
+    raise KeyError("The lowercase 'label' column was not found.")
 
 
 df = df[
@@ -261,7 +261,7 @@ feat_df = pd.concat(
 )
 
 if feat_df.shape[1] == 0:
-    raise RuntimeError("IoT23 预处理后没有可用特征。")
+    raise RuntimeError("No usable features remain after IoT23 preprocessing.")
 
 all_idx = np.arange(len(df), dtype=np.int64)
 
@@ -318,7 +318,7 @@ print(
 
 NUM_CLASSES = len(np.unique(labels))
 if len(np.unique(labels[train_idx])) != NUM_CLASSES:
-    raise RuntimeError("训练集没有覆盖全部 IoT23 类别。")
+    raise RuntimeError("The training set does not cover all IoT23 classes.")
 
 print("Device:", DEVICE)
 print("IoT23 label mapping:", id_to_label)
@@ -885,7 +885,7 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc="Processing batches"):
 
 
 if slow_encoder is None:
-    raise RuntimeError("模型未初始化，请检查 WINDOW_SIZE。")
+    raise RuntimeError("The model was not initialized. Check WINDOW_SIZE.")
 
 
 
@@ -938,7 +938,7 @@ print(f"Expected hold-out samples: {len(test_idx)}")
 print(f"Actually evaluated samples: {len(y_true_test)}")
 
 if len(y_true_test) == 0:
-    raise RuntimeError("没有测试样本被评估。")
+    raise RuntimeError("No test samples were evaluated.")
 
 target_names = [id_to_label[i] for i in range(NUM_CLASSES)]
 report = classification_report(

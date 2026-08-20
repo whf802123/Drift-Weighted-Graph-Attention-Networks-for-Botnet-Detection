@@ -76,8 +76,8 @@ if not SWEEP_CHILD:
             print(proc.stdout)
             print(proc.stderr)
             raise RuntimeError(
-                f"CORR_THRESHOLD={threshold:.1f} 运行失败，"
-                f"请查看日志：{log_path}"
+                f"CORR_THRESHOLD={threshold:.1f} failed. "
+                f"See the log: {log_path}"
             )
 
         result_prefix = "__CORR_SWEEP_RESULT__="
@@ -88,8 +88,8 @@ if not SWEEP_CHILD:
         if not result_lines:
             print(proc.stdout)
             raise RuntimeError(
-                f"CORR_THRESHOLD={threshold:.1f} 未输出可解析指标，"
-                f"请查看日志：{log_path}"
+                f"CORR_THRESHOLD={threshold:.1f} did not produce parseable metrics. "
+                f"See the log: {log_path}"
             )
 
         metrics = json.loads(result_lines[-1][len(result_prefix):])
@@ -236,7 +236,7 @@ if is_unnamed(df.columns[0]):
 df.insert(0, 'num', range(len(df)))
 
 if 'label' not in df.columns:
-    raise KeyError("未找到列名 'label'。请确认 CSV 中的标签列名为小写 label。")
+    raise KeyError("Column 'label' was not found. Ensure that the label column in the CSV is named 'label' in lowercase.")
 
 
 rare_labels_to_drop = {
@@ -320,7 +320,7 @@ cat_df = (
 )
 feat_df = pd.concat([num_df, cat_df], axis=1)
 if feat_df.shape[1] == 0:
-    raise RuntimeError("未能构建任何特征列，请检查输入 CSV。")
+    raise RuntimeError("No feature columns could be constructed. Check the input CSV.")
 
 
 N_total = len(df)
@@ -370,7 +370,7 @@ print(
 train_unique_ids = np.unique(labels[train_idx])
 NUM_CLASSES = len(train_unique_ids)
 if NUM_CLASSES != len(np.unique(labels)):
-    raise RuntimeError("训练集未包含全部类别，无法进行当前多分类设置。")
+    raise RuntimeError("The training set does not contain all classes; the current multiclass configuration cannot be used.")
 
 
 
@@ -994,7 +994,7 @@ print(f"Expected hold-out samples: {len(test_idx)}")
 print(f"Actually evaluated samples: {len(y_true_test)}")
 
 if len(y_true_test) == 0:
-    print("测试集为空：检查划分或窗口设置。")
+    print("The test set is empty. Check the split or window settings.")
 else:
     unique_ids = np.arange(NUM_CLASSES)
     target_names = [id_to_label[i] for i in unique_ids]
@@ -1068,13 +1068,13 @@ else:
         plt.show()
         plt.close(fig_cm)
     except Exception as e:
-        print("绘制混淆矩阵出错：", e)
+        print("Error plotting the confusion matrix:", e)
 
 
     try:
         if NUM_CLASSES > 2:
             if y_prob_test_all.shape[0] == 0:
-                print("[ROC] 没有收集到测试概率，跳过绘图。")
+                print("[ROC] No test probabilities were collected; skipping the plot.")
             else:
                 classes_sorted = unique_ids.tolist()
                 y_true_bin = label_binarize(
@@ -1109,11 +1109,11 @@ else:
                     plt.tight_layout()
                     plt.show()
                 else:
-                    print("[ROC] 各类别在测试集中都缺少正/负样本，无法绘制多分类 ROC。")
+                    print("[ROC] Every class lacks positive or negative samples in the test set, so multiclass ROC curves cannot be plotted.")
         else:
-            print("[ROC] 当前为二分类，已跳过多分类 ROC。")
+            print("[ROC] The current task is binary; skipping multiclass ROC curves.")
     except Exception as e:
-        print("ROC 计算/绘制出错：", e)
+        print("Error computing or plotting ROC curves:", e)
 
 
 
@@ -1144,13 +1144,13 @@ try:
             labels_tsne = labels_tsne[finite_mask]
 
         if len(hidden_test_np) <= 10:
-            print("t-SNE: 有效测试隐藏向量过少，跳过可视化。")
+            print("t-SNE: Too few valid test hidden vectors; skipping visualization.")
         else:
 
             dim_std = hidden_test_np.std(axis=0)
             useful_dims = dim_std > 1e-10
             if useful_dims.sum() < 2:
-                print("t-SNE: embedding 有效变化维度少于 2，无法可靠可视化。")
+                print("t-SNE: The embedding has fewer than two varying dimensions and cannot be visualized reliably.")
             else:
                 if useful_dims.sum() != hidden_test_np.shape[1]:
                     removed = hidden_test_np.shape[1] - int(useful_dims.sum())
@@ -1224,8 +1224,6 @@ try:
                 plt.show()
                 plt.close(fig_tsne)
     else:
-        print("t-SNE: 测试隐藏向量过少，跳过可视化。")
+        print("t-SNE: Too few test hidden vectors; skipping visualization.")
 except Exception as e:
-    print("t-SNE 可视化失败：", e)
-
-
+    print("t-SNE visualization failed:", e)
