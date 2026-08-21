@@ -57,7 +57,6 @@ MANUAL_MINORITY_LABELS = {'C&C', 'C&C-HeartBeat'}
 def is_unnamed(colname):
     return (colname == '') or pd.isna(colname) or str(colname).lower().startswith('unnamed')
 
-
 def ip_to_int(val):
     try:
         s = str(val).strip()
@@ -66,7 +65,6 @@ def ip_to_int(val):
         return int(ipaddress.ip_address(s))
     except Exception:
         return np.nan
-
 
 def to_float(val):
     try:
@@ -87,7 +85,6 @@ df.insert(0, 'num', range(len(df)))
 if 'label' not in df.columns:
     raise KeyError("Column 'label' was not found. Ensure that the label column in the CSV is named 'label' in lowercase.")
 
-
 rare_labels_to_drop = {
     'C&C-FileDownload', 'C&C-Torii', 'FileDownload',
     'C&C-HeartBeat-FileDownload', 'Okiru-Attack', 'C&C-Mirai', 'Attack'
@@ -97,17 +94,14 @@ df = df[~df['label'].isin(rare_labels_to_drop)].reset_index(drop=True)
 after = len(df)
 print(f"Dropped rare classes {sorted(list(rare_labels_to_drop))}. Rows: {before} -> {after}")
 
-
 print(f"Minority (kept intact): {sorted(MANUAL_MINORITY_LABELS)}")
 print(f"Sampling {SAMPLE_FRAC * 100:.1f}% for ALL other classes ...")
-
 
 def keep_or_sample(group: pd.DataFrame) -> pd.DataFrame:
     lab = str(group.name)
     if lab in MANUAL_MINORITY_LABELS:
         return group
     return group.sample(frac=SAMPLE_FRAC, random_state=SEED)
-
 
 df = (
     df.groupby('label', group_keys=False)
@@ -123,7 +117,6 @@ too_small = set(label_counts_sampled[label_counts_sampled < 2].index.tolist())
 if too_small:
     print(f"[NOTICE] Classes with <2 samples after sampling are dropped: {sorted(list(too_small))}")
     df = df[~df['label'].isin(too_small)].reset_index(drop=True)
-
 
 ip_cols = [c for c in ['id.orig_h', 'id.resp_h'] if c in df.columns]
 num_cols_raw = [
@@ -146,14 +139,12 @@ for c in num_cols_raw:
 for c in cat_cols:
     df[c] = df[c].astype(str).fillna('-').replace({'nan': '-'})
 
-
 label_text = df['label'].astype(str).values
 unique_labels_text = pd.unique(label_text)
 label_to_id = {lab: i for i, lab in enumerate(unique_labels_text)}
 id_to_label = {v: k for k, v in label_to_id.items()}
 labels = np.array([label_to_id[x] for x in label_text], dtype=int)
 print("\nLabel mapping after sampling:", label_to_id)
-
 
 num_df = (
     df[num_cols_raw + ip_cols].copy()
@@ -168,7 +159,6 @@ cat_df = (
 feat_df = pd.concat([num_df, cat_df], axis=1)
 if feat_df.shape[1] == 0:
     raise RuntimeError("No feature columns could be constructed. Check the input CSV.")
-
 
 N_total = len(df)
 all_idx = np.arange(N_total)
@@ -211,7 +201,6 @@ print(
     f"test={len(test_idx)} ({TEST_RATIO:.0%})"
 )
 
-
 train_unique_ids = np.unique(labels[train_idx])
 NUM_CLASSES = len(train_unique_ids)
 if NUM_CLASSES != len(np.unique(labels)):
@@ -226,7 +215,6 @@ def _safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
     return corr
 
-
 def build_train_graph(x_train_np: np.ndarray):
     n = x_train_np.shape[0]
     if n == 0:
@@ -238,7 +226,6 @@ def build_train_graph(x_train_np: np.ndarray):
 
     src, dst = np.where(adj)
 
-
     self_nodes = np.arange(n, dtype=np.int64)
     src = np.concatenate([src.astype(np.int64), self_nodes])
     dst = np.concatenate([dst.astype(np.int64), self_nodes])
@@ -249,7 +236,6 @@ def build_train_graph(x_train_np: np.ndarray):
         device=DEVICE,
     )
     return edge_index
-
 
 def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
     n_train = x_train_np.shape[0]
@@ -264,7 +250,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
 
     src_list = []
     dst_list = []
-
 
     if n_train > 0:
         corr_tt = corr[:n_train, :n_train]
@@ -281,7 +266,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
             src_list.append(train_src.astype(np.int64))
             dst_list.append((n_train + test_col).astype(np.int64))
 
-
     self_nodes = np.arange(n_total, dtype=np.int64)
     src_list.append(self_nodes)
     dst_list.append(self_nodes)
@@ -296,8 +280,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
     )
     x_eval_tensor = torch.tensor(x_eval_np, dtype=torch.float, device=DEVICE)
     return x_eval_tensor, edge_index
-
-
 
 class WeightedGATClassifier(nn.Module):
     def __init__(self, in_channels, hidden_channels, heads, num_classes=2):
@@ -353,7 +335,6 @@ y_pred_test = []
 y_prob_test_all = []
 hidden_test = []
 
-
 global_idx = 0
 
 def compute_training_loss(
@@ -390,7 +371,6 @@ def compute_training_loss(
     used_idx = torch.cat(used_parts, dim=0)
     return criterion(logits[used_idx], y_train_local[used_idx]), used_idx
 
-
 def attention_heads_node_mean_from_cached_incoming(
     ei_used,
     att_heads,
@@ -422,7 +402,6 @@ def attention_heads_node_mean_from_cached_incoming(
     ref_std = ref.std(dim=0, keepdim=True)
     in_mean = (in_mean - ref_mean) / (ref_std + 1e-6)
     return in_mean
-
 
 def sparse_entropy_loss_sum_heads(
     ei_used,
@@ -471,7 +450,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     batch_labels = labels[start:start + BATCH_SIZE]
     bsz = len(batch_feats)
 
-
     for i in range(bsz):
         features_window.append(batch_feats[i])
         labels_window.append(int(batch_labels[i]))
@@ -483,12 +461,9 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
 
     first_window = (model is None)
 
-
     x_win_np = np.asarray(features_window, dtype=np.float64)
     y_win_np = np.asarray(labels_window, dtype=np.int64)
     idx_win_np = np.asarray(index_window, dtype=np.int64)
-
-
 
     new_mask_full = np.zeros(WINDOW_SIZE, dtype=bool)
     if first_window:
@@ -499,10 +474,8 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     train_mask_full = is_train[idx_win_np]
     test_mask_full = is_test[idx_win_np]
 
-
     x_train_np = x_win_np[train_mask_full]
     y_train_np = y_win_np[train_mask_full]
-
 
     new_train_mask_local_np = new_mask_full[train_mask_full]
 
@@ -746,5 +719,6 @@ try:
         plt.show()
     else:
         print("t-SNE: Too few test hidden vectors; skipping visualization.")
+        
 except Exception as e:
     print("t-SNE visualization failed:", e)
