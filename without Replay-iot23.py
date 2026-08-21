@@ -67,14 +67,11 @@ np.random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
-
 SAMPLE_FRAC = 0.05
 MANUAL_MINORITY_LABELS = {'C&C', 'C&C-HeartBeat'}
 
-
 def is_unnamed(colname):
     return (colname == '') or pd.isna(colname) or str(colname).lower().startswith('unnamed')
-
 
 def ip_to_int(val):
     try:
@@ -85,7 +82,6 @@ def ip_to_int(val):
     except Exception:
         return np.nan
 
-
 def to_float(val):
     try:
         s = str(val).strip()
@@ -95,13 +91,10 @@ def to_float(val):
     except Exception:
         return np.nan
 
-
 df = pd.read_csv(CSV_PATH)
-
 
 if is_unnamed(df.columns[0]):
     df.drop(df.columns[0], axis=1, inplace=True)
-
 
 df.insert(0, 'num', range(len(df)))
 
@@ -118,17 +111,14 @@ df = df[~df['label'].isin(rare_labels_to_drop)].reset_index(drop=True)
 after = len(df)
 print(f"Dropped rare classes {sorted(list(rare_labels_to_drop))}. Rows: {before} -> {after}")
 
-
 print(f"Minority (kept intact): {sorted(MANUAL_MINORITY_LABELS)}")
 print(f"Sampling {SAMPLE_FRAC * 100:.1f}% for ALL other classes ...")
-
 
 def keep_or_sample(group: pd.DataFrame) -> pd.DataFrame:
     lab = str(group.name)
     if lab in MANUAL_MINORITY_LABELS:
         return group
     return group.sample(frac=SAMPLE_FRAC, random_state=SEED)
-
 
 df = (
     df.groupby('label', group_keys=False)
@@ -140,12 +130,10 @@ label_counts_sampled = df['label'].astype(str).value_counts()
 print("Label counts after manual-minority keep & uniform sampling:")
 print(label_counts_sampled.to_string())
 
-
 too_small = set(label_counts_sampled[label_counts_sampled < 2].index.tolist())
 if too_small:
     print(f"[NOTICE] Classes with <2 samples after sampling are dropped: {sorted(list(too_small))}")
     df = df[~df['label'].isin(too_small)].reset_index(drop=True)
-
 
 ip_cols = [c for c in ['id.orig_h', 'id.resp_h'] if c in df.columns]
 num_cols_raw = [
@@ -168,14 +156,12 @@ for c in num_cols_raw:
 for c in cat_cols:
     df[c] = df[c].astype(str).fillna('-').replace({'nan': '-'})
 
-
 label_text = df['label'].astype(str).values
 unique_labels_text = pd.unique(label_text)
 label_to_id = {lab: i for i, lab in enumerate(unique_labels_text)}
 id_to_label = {v: k for k, v in label_to_id.items()}
 labels = np.array([label_to_id[x] for x in label_text], dtype=int)
 print("\nLabel mapping after sampling:", label_to_id)
-
 
 num_df = (
     df[num_cols_raw + ip_cols].copy()
@@ -191,7 +177,6 @@ feat_df = pd.concat([num_df, cat_df], axis=1)
 if feat_df.shape[1] == 0:
     raise RuntimeError("No feature columns could be constructed. Please check the input CSV.")
 
-
 N_total = len(df)
 all_idx = np.arange(N_total)
 train_idx, test_idx = train_test_split(
@@ -202,10 +187,8 @@ train_idx, test_idx = train_test_split(
     shuffle=True,
 )
 
-
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians)
-
 
 scaler = StandardScaler(with_mean=True, with_std=True)
 features = np.empty_like(feat_df.values, dtype=np.float64)
@@ -217,12 +200,10 @@ is_train = np.zeros(N, dtype=bool)
 is_train[train_idx] = True
 is_test = ~is_train
 
-
 train_unique_ids = np.unique(labels[train_idx])
 NUM_CLASSES = len(train_unique_ids)
 if NUM_CLASSES != len(np.unique(labels)):
     raise RuntimeError("The training set does not contain all classes required for the current multiclass setting.")
-
 
 def _safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     if x_np.shape[0] == 0:
@@ -232,7 +213,6 @@ def _safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     corr = np.corrcoef(x_np)
     corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
     return corr
-
 
 def build_train_graph(x_train_np: np.ndarray):
     n = x_train_np.shape[0]
@@ -245,7 +225,6 @@ def build_train_graph(x_train_np: np.ndarray):
 
     src, dst = np.where(adj)
 
-
     self_nodes = np.arange(n, dtype=np.int64)
     src = np.concatenate([src.astype(np.int64), self_nodes])
     dst = np.concatenate([dst.astype(np.int64), self_nodes])
@@ -256,7 +235,6 @@ def build_train_graph(x_train_np: np.ndarray):
         device=DEVICE,
     )
     return edge_index
-
 
 def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
     n_train = x_train_np.shape[0]
@@ -272,7 +250,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
     src_list = []
     dst_list = []
 
-
     if n_train > 0:
         corr_tt = corr[:n_train, :n_train]
         adj_tt = (np.abs(corr_tt) >= CORR_THRESHOLD)
@@ -281,13 +258,11 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
         src_list.append(src_tt.astype(np.int64))
         dst_list.append(dst_tt.astype(np.int64))
 
-
         corr_train_test = corr[:n_train, n_train:]
         train_src, test_col = np.where(np.abs(corr_train_test) >= CORR_THRESHOLD)
         if train_src.size > 0:
             src_list.append(train_src.astype(np.int64))
             dst_list.append((n_train + test_col).astype(np.int64))
-
 
     self_nodes = np.arange(n_total, dtype=np.int64)
     src_list.append(self_nodes)
@@ -303,7 +278,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
     )
     x_eval_tensor = torch.tensor(x_eval_np, dtype=torch.float, device=DEVICE)
     return x_eval_tensor, edge_index
-
 
 class WeightedGATClassifier(nn.Module):
     def __init__(self, in_channels, hidden_channels, heads, num_classes=2):
@@ -330,14 +304,12 @@ class WeightedGATClassifier(nn.Module):
         )
         x1 = F.elu(x1)
 
-
         edge_weight = att_heads.mean(dim=1)
         self.cached_att = (ei_used, att_heads)
 
         x2 = self.gcn2(x1, ei_used, edge_weight=edge_weight)
         logits = self.classifier(x2)
         return logits, x2
-
 
 features_window = deque(maxlen=WINDOW_SIZE)
 labels_window = deque(maxlen=WINDOW_SIZE)
@@ -347,7 +319,6 @@ model = None
 optimizer = None
 criterion = None
 
-
 if NUM_CLASSES == 2:
     train_labels_only = labels[train_idx]
     pos_ratio = (train_labels_only == 1).mean() + 1e-8
@@ -355,7 +326,6 @@ if NUM_CLASSES == 2:
     w_pos = 1.0 / max(1e-8, pos_ratio)
 else:
     w_neg = w_pos = 1.0
-
 
 y_true_test = []
 y_pred_test = []
@@ -371,20 +341,16 @@ incremental_update_times = []
 inference_total_time = 0.0
 inference_samples = 0
 
-
 global_idx = 0
 stream_window_id = 0
-
 
 irgd_steps = 0
 irgd_conflicts = 0
 irgd_cosines = []
 
-
 def sync_device():
     if DEVICE.type == 'cuda':
         torch.cuda.synchronize()
-
 
 def select_training_indices(
     n_nodes,
@@ -404,28 +370,23 @@ def select_training_indices(
     # Ablation: remove replay buffer, only use newly arrived samples
     return new_idx
 
-
 def build_self_only_graph(n_nodes):
     nodes = torch.arange(n_nodes, dtype=torch.long, device=DEVICE)
     return torch.stack([nodes, nodes], dim=0)
-
 
 def _loss_on_used_nodes(logits, y_train_local, used_idx):
     if used_idx is None or used_idx.numel() == 0:
         return None
     return criterion(logits[used_idx], y_train_local[used_idx])
 
-
 def _zeros_like_param(param):
     return torch.zeros_like(param, memory_format=torch.preserve_format)
-
 
 def _materialize_grads(grads, params):
     out = []
     for g, p in zip(grads, params):
         out.append(_zeros_like_param(p) if g is None else g)
     return out
-
 
 def apply_irgd_step(
     model,
@@ -440,7 +401,6 @@ def apply_irgd_step(
     encoder_param_ids = {
         id(p) for p in list(model.gat1.parameters()) + list(model.gcn2.parameters())
     }
-
 
     logits_full, _ = model(x_train_tensor, train_edge_index)
     ce_full = _loss_on_used_nodes(logits_full, y_train_tensor, used_idx)
@@ -471,10 +431,8 @@ def apply_irgd_step(
     )
     grads_graph = _materialize_grads(grads_graph_raw, params)
 
-
     logits_self, _ = model(x_train_tensor, self_edge_index)
     ce_self = _loss_on_used_nodes(logits_self, y_train_tensor, used_idx)
-
 
     grads_self_raw = torch.autograd.grad(
         ce_self,
@@ -484,7 +442,6 @@ def apply_irgd_step(
         allow_unused=True,
     )
     grads_self = _materialize_grads(grads_self_raw, params)
-
 
     dot = torch.zeros((), device=DEVICE)
     self_norm_sq = torch.zeros((), device=DEVICE)
@@ -501,14 +458,12 @@ def apply_irgd_step(
 
     conflict = bool(dot.detach().item() < 0.0)
 
-
     denom = torch.sqrt(self_norm_sq.clamp_min(IRGD_EPS)) * torch.sqrt(
         rel_norm_sq.clamp_min(IRGD_EPS)
     )
     cosine = (dot / denom.clamp_min(IRGD_EPS)).detach().item()
 
     if conflict:
-
 
         coeff = dot / self_norm_sq.clamp_min(IRGD_EPS)
     else:
@@ -543,7 +498,6 @@ def apply_irgd_step(
         'cosine': float(cosine),
     }
 
-
 def attention_heads_node_mean_from_cached_incoming(
     ei_used,
     att_heads,
@@ -575,7 +529,6 @@ def attention_heads_node_mean_from_cached_incoming(
     ref_std = ref.std(dim=0, keepdim=True)
     in_mean = (in_mean - ref_mean) / (ref_std + 1e-6)
     return in_mean
-
 
 def sparse_entropy_loss_sum_heads(
     ei_used,
@@ -619,12 +572,10 @@ def sparse_entropy_loss_sum_heads(
 
     return norm_entropy.mean()
 
-
 for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     batch_feats = features[start:start + BATCH_SIZE]
     batch_labels = labels[start:start + BATCH_SIZE]
     bsz = len(batch_feats)
-
 
     for i in range(bsz):
         features_window.append(batch_feats[i])
@@ -641,11 +592,9 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     window_irgd_conflicts = 0
     window_irgd_cosines = []
 
-
     x_win_np = np.asarray(features_window, dtype=np.float64)
     y_win_np = np.asarray(labels_window, dtype=np.int64)
     idx_win_np = np.asarray(index_window, dtype=np.int64)
-
 
     new_mask_full = np.zeros(WINDOW_SIZE, dtype=bool)
     if first_window:
@@ -656,10 +605,8 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     train_mask_full = is_train[idx_win_np]
     test_mask_full = is_test[idx_win_np]
 
-
     x_train_np = x_win_np[train_mask_full]
     y_train_np = y_win_np[train_mask_full]
-
 
     new_train_mask_local_np = new_mask_full[train_mask_full]
 
@@ -673,7 +620,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         dtype=torch.bool,
         device=DEVICE,
     )
-
 
     sync_device()
     graph_start_time = time.perf_counter()
@@ -709,7 +655,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     else:
         epochs_now = GAT_EPOCHS_INC
 
-
     self_edge_index = build_self_only_graph(x_train_tensor.size(0))
 
     sync_device()
@@ -717,7 +662,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
 
     for _ in range(epochs_now):
         model.train()
-
 
         used_idx = select_training_indices(
             x_train_tensor.size(0),
@@ -785,7 +729,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     else:
         incremental_update_times.append(update_elapsed)
 
-
     if first_window:
         eval_test_mask_full = test_mask_full
     else:
@@ -794,7 +737,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     if eval_test_mask_full.any():
         x_new_test_np = x_win_np[eval_test_mask_full]
         y_new_test_np = y_win_np[eval_test_mask_full]
-
 
         x_eval_tensor, eval_edge_index = build_inductive_eval_graph(
             x_train_np,
@@ -836,7 +778,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         y_pred_test.extend(window_pred.tolist())
         y_prob_test_all.append(probs_test.cpu().numpy())
         hidden_test.extend(mixed12_test.cpu().numpy().tolist())
-
 
     if ENABLE_WINDOW_ANALYSIS and test_mask_full.any():
         x_window_test_np = x_win_np[test_mask_full]
@@ -914,7 +855,6 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     stream_window_id += 1
     model.cached_att = None
 
-
 if IRGD_ENABLED:
     print("\n=== IRGD Training Diagnostics ===")
     print(f"IRGD update steps: {irgd_steps}")
@@ -924,7 +864,6 @@ if IRGD_ENABLED:
         print(f"Conflict steps: {irgd_conflicts} ({conflict_rate:.2f}%)")
         print(f"Mean cosine(g_self, g_rel): {mean_cos:.4f}")
         print("No-conflict steps are mathematically identical to baseline full-graph updates when IRGD_REL_WEIGHT=1.0.")
-
 
 y_true_test = np.asarray(y_true_test, dtype=np.int64)
 y_pred_test = np.asarray(y_pred_test, dtype=np.int64)
@@ -1005,10 +944,8 @@ else:
             f"f1-score: {m['f1-score'] * 100:.2f}%"
         )
 
-
     try:
         labels_order = unique_ids.tolist()
-
 
         display_names = []
 
@@ -1046,7 +983,6 @@ else:
         ax_cm.set_xlabel('Predicted label')
         ax_cm.set_ylabel('True label')
 
-
         plt.setp(
             ax_cm.get_xticklabels(),
             rotation=45,
@@ -1060,7 +996,6 @@ else:
 
     except Exception as e:
         print("Error while plotting the confusion matrix:", e)
-
 
     try:
         print("\n=== ROC Diagnostics ===")
@@ -1091,7 +1026,6 @@ else:
 
             plotted = False
 
-
             if NUM_CLASSES > 2:
 
                 classes_sorted = np.arange(NUM_CLASSES)
@@ -1121,7 +1055,6 @@ else:
                         f"positive={n_pos}, negative={n_neg}"
                     )
 
-
                     if n_pos == 0 or n_neg == 0:
                         print(
                             f"[ROC] Skip {class_name}: "
@@ -1144,7 +1077,6 @@ else:
                     )
 
                     plotted = True
-
 
             elif NUM_CLASSES == 2:
 
@@ -1173,9 +1105,7 @@ else:
 
                     plotted = True
 
-
             if plotted:
-
 
                 ax_roc.plot(
                     [0, 1],
@@ -1213,7 +1143,6 @@ else:
 
     except Exception as e:
         print("Error while computing or plotting ROC:", repr(e))
-
 
 if ENABLE_WINDOW_ANALYSIS:
     if len(window_metrics) > 0:
@@ -1326,7 +1255,6 @@ if ENABLE_WINDOW_ANALYSIS:
         else:
             print("[RGC Conflict] No RGC-enabled window was recorded.")
 
-
 TSNE_MAX_PER_CLASS = 1000
 
 try:
@@ -1359,11 +1287,9 @@ try:
                     print(f"[t-SNE] Removed {removed} near-constant dimensions.")
                 x_tsne = hidden_test_np[:, useful_dims]
 
-
                 x_tsne = StandardScaler().fit_transform(x_tsne)
                 x_tsne = np.nan_to_num(x_tsne, nan=0.0, posinf=10.0, neginf=-10.0)
                 x_tsne = np.clip(x_tsne, -10.0, 10.0)
-
 
                 rng = np.random.default_rng(SEED)
                 selected = []
@@ -1404,7 +1330,6 @@ try:
                     f"x=[{emb_2d[:, 0].min():.3f}, {emb_2d[:, 0].max():.3f}], "
                     f"y=[{emb_2d[:, 1].min():.3f}, {emb_2d[:, 1].max():.3f}]"
                 )
-
 
                 fig_tsne, ax_tsne = plt.subplots(figsize=(7.0, 6.0))
                 for cls_id in np.unique(labels_plot):
