@@ -76,7 +76,6 @@ if len(unique_labels) != 2 or set(unique_labels.tolist()) != {0, 1}:
 label_to_id = {'Normal': 0, 'Botnet': 1}
 id_to_label = {0: 'Normal', 1: 'Botnet'}
 
-
 feat_df = df[feature_cols].apply(pd.to_numeric, errors='coerce')
 
 N_total = len(df)
@@ -98,10 +97,8 @@ val_idx, test_idx = train_test_split(
     shuffle=True,
 )
 
-
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians).fillna(0.0)
-
 
 scaler = StandardScaler(with_mean=True, with_std=True)
 features = np.empty_like(feat_df.values, dtype=np.float64)
@@ -131,8 +128,6 @@ print("CTU13 label mapping:", id_to_label)
 print(f"Samples: total={N_total}, train={len(train_idx)}, test={len(test_idx)}")
 print(f"Features: {len(feature_cols)}")
 
-
-
 def _safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     if x_np.shape[0] == 0:
         return np.empty((0, 0), dtype=np.float64)
@@ -141,7 +136,6 @@ def _safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     corr = np.corrcoef(x_np)
     corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
     return corr
-
 
 def build_train_graph(x_train_np: np.ndarray):
     n = x_train_np.shape[0]
@@ -154,7 +148,6 @@ def build_train_graph(x_train_np: np.ndarray):
 
     src, dst = np.where(adj)
 
-
     self_nodes = np.arange(n, dtype=np.int64)
     src = np.concatenate([src.astype(np.int64), self_nodes])
     dst = np.concatenate([dst.astype(np.int64), self_nodes])
@@ -165,7 +158,6 @@ def build_train_graph(x_train_np: np.ndarray):
         device=DEVICE,
     )
     return edge_index
-
 
 def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
     n_train = x_train_np.shape[0]
@@ -180,7 +172,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
 
     src_list = []
     dst_list = []
-
 
     if n_train > 0:
         corr_tt = corr[:n_train, :n_train]
@@ -197,7 +188,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
             src_list.append(train_src.astype(np.int64))
             dst_list.append((n_train + test_col).astype(np.int64))
 
-
     self_nodes = np.arange(n_total, dtype=np.int64)
     src_list.append(self_nodes)
     dst_list.append(self_nodes)
@@ -212,8 +202,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
     )
     x_eval_tensor = torch.tensor(x_eval_np, dtype=torch.float, device=DEVICE)
     return x_eval_tensor, edge_index
-
-
 
 class WeightedGATClassifier(nn.Module):
     def __init__(self, in_channels, hidden_channels, heads, num_classes=2):
@@ -255,7 +243,6 @@ index_window = deque(maxlen=WINDOW_SIZE)
 model = None
 optimizer = None
 criterion = None
-
 
 if NUM_CLASSES == 2:
     train_labels_only = labels[train_idx]
