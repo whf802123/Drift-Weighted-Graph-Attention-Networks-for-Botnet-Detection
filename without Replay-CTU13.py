@@ -1,12 +1,9 @@
 
 
 import warnings
-warnings.filterwarnings("ignore")
+import time
 
-import os
-import sys
-import json
-import subprocess
+warnings.filterwarnings("ignore")
 
 import pandas as pd
 import numpy as np
@@ -25,164 +22,43 @@ from sklearn.metrics import (
     auc,
     confusion_matrix,
     ConfusionMatrixDisplay,
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
 )
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-
-SWEEP_CHILD = os.environ.get("CORR_SWEEP_CHILD", "0") == "1"
-
-if not SWEEP_CHILD:
-    script_path = os.path.abspath(__file__)
-    output_dir = os.path.dirname(script_path)
-    thresholds = [round(x, 1) for x in np.arange(0.1, 1.01, 0.1)]
-
-    results = []
-
-    print("=" * 72)
-    print("Starting CORR_THRESHOLD sweep:", thresholds)
-    print("=" * 72)
-
-    for threshold in thresholds:
-        print(f"\n>>> Running CORR_THRESHOLD = {threshold:.1f}")
-
-        child_env = os.environ.copy()
-        child_env["CORR_SWEEP_CHILD"] = "1"
-        child_env["CORR_THRESHOLD"] = f"{threshold:.1f}"
-
-
-        child_env["MPLBACKEND"] = "Agg"
-
-        proc = subprocess.run(
-            [sys.executable, script_path],
-            env=child_env,
-            cwd=output_dir,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-
-
-        log_path = os.path.join(
-            output_dir,
-            f"corr_threshold_{threshold:.1f}.log",
-        )
-        with open(log_path, "w", encoding="utf-8") as f:
-            f.write(proc.stdout)
-            if proc.stderr:
-                f.write("\n\n===== STDERR =====\n")
-                f.write(proc.stderr)
-
-        if proc.returncode != 0:
-            print(proc.stdout)
-            print(proc.stderr)
-            raise RuntimeError(
-                f"CORR_THRESHOLD={threshold:.1f} failed. "
-                f"See the log: {log_path}"
-            )
-
-        result_prefix = "__CORR_SWEEP_RESULT__="
-        result_lines = [
-            line for line in proc.stdout.splitlines()
-            if line.startswith(result_prefix)
-        ]
-
-        if not result_lines:
-            print(proc.stdout)
-            raise RuntimeError(
-                f"CORR_THRESHOLD={threshold:.1f} did not produce parseable metrics. "
-                f"See the log: {log_path}"
-            )
-
-        metrics = json.loads(result_lines[-1][len(result_prefix):])
-        results.append(metrics)
-
-        print(
-            f"    Accuracy={metrics['Accuracy']:.4f}% | "
-            f"Macro Precision={metrics['Macro Precision']:.4f}% | "
-            f"Macro Recall={metrics['Macro Recall']:.4f}% | "
-            f"Macro F1-score={metrics['Macro F1-score']:.4f}%"
-        )
-
-
-    results_df = pd.DataFrame(results).sort_values("CORR_THRESHOLD")
-    csv_out = os.path.join(output_dir, "corr_threshold_sweep_results.csv")
-    results_df.to_csv(csv_out, index=False, encoding="utf-8-sig")
-
-    print("\n=== CORR_THRESHOLD Sweep Results ===")
-    print(results_df.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
-    print(f"\nResults CSV saved to: {csv_out}")
-
-    fig, ax = plt.subplots(figsize=(9.2, 6.0))
-
-    metric_columns = [
-        "Accuracy",
-        "Macro Precision",
-        "Macro Recall",
-        "Macro F1-score",
-    ]
-
-    for metric in metric_columns:
-        ax.plot(
-            results_df["CORR_THRESHOLD"],
-            results_df[metric],
-            marker="o",
-            linewidth=2,
-            label=metric,
-        )
-
-    ax.set_xlabel("CORR_THRESHOLD")
-    ax.set_ylabel("Score (%)")
-    ax.set_title("Performance vs. CORR_THRESHOLD")
-    ax.set_xticks(thresholds)
-    ax.grid(True, linestyle="--", alpha=0.35)
-    ax.legend()
-
-
-    y_min = float(results_df[metric_columns].min().min())
-    y_max = float(results_df[metric_columns].max().max())
-    y_span = max(y_max - y_min, 1.0)
-    margin = max(1.0, 0.12 * y_span)
-    ax.set_ylim(max(0.0, y_min - margin), min(100.0, y_max + margin))
-
-    fig.tight_layout()
-
-    fig_out = os.path.join(output_dir, "corr_threshold_metrics.png")
-    fig.savefig(fig_out, dpi=300, bbox_inches="tight")
-    print(f"Metric figure saved to: {fig_out}")
-
-    plt.show()
-    plt.close(fig)
-
-    sys.exit(0)
-
-CSV_PATH         = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
-WINDOW_SIZE      = 1000
-BATCH_SIZE       = 100
+CSV_PATH = r'C:\Users\whf80\Desktop\DW-GAT\ICASSP\CTU13.csv'
+WINDOW_SIZE = 1000
+BATCH_SIZE = 100
 GAT_EPOCHS_FIRST = 10
-GAT_EPOCHS_INC   = 2
-ATTN_HEADS       = 4
-HIDDEN_CHANNELS  = 8
-CORR_THRESHOLD   = float(os.environ.get("CORR_THRESHOLD", "0.1"))
-TRAIN_RATIO      = 0.70
-VALIDATION_RATIO = 0.15
-TEST_RATIO       = 0.15
-LR               = 5e-3
-WEIGHT_DECAY     = 0.0
-SEED             = 42
+GAT_EPOCHS_INC = 2
+ATTN_HEADS = 4
+HIDDEN_CHANNELS = 8
+CORR_THRESHOLD = 0.1
+TEST_RATIO = 0.30
+LR = 5e-3
+WEIGHT_DECAY = 0.0
+SEED = 42
 
-USE_REPLAY       = True
-REPLAY_RATIO     = 0.10
+USE_REPLAY = False
+REPLAY_RATIO = 0.0
 
-ENTROPY_LAMBDA   = 1e-3
+ENTROPY_LAMBDA = 1e-3
 
-IRGD_ENABLED          = True
-IRGD_ON_FIRST_WINDOW  = False
-IRGD_REL_WEIGHT       = 1.0
-IRGD_EPS              = 1e-12
-IRGD_GRAD_CLIP        = None
+ENABLE_WINDOW_ANALYSIS = True
+
+WINDOW_METRIC_AVERAGE = 'weighted'
+RGC_ROLLING_WINDOWS = 50
+
+IRGD_ENABLED = True
+IRGD_ON_FIRST_WINDOW = False
+IRGD_REL_WEIGHT = 1.0
+IRGD_EPS = 1e-12
+IRGD_GRAD_CLIP = None
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.manual_seed(SEED)
@@ -190,74 +66,49 @@ np.random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
-print(f"\n[Run config] CORR_THRESHOLD = {CORR_THRESHOLD:.1f}")
-
 df = pd.read_csv(CSV_PATH)
 
 if 'Label' not in df.columns:
-    raise KeyError("Column 'Label' was not found. Ensure that the label column in the CTU13 CSV is named 'Label'.")
-
+    raise KeyError("Column 'Label' was not found. Please confirm that the CTU13 CSV label column is named Label.")
 
 feature_cols = [c for c in df.columns if c not in ('num', 'Label')]
 if len(feature_cols) == 0:
     raise RuntimeError("No usable feature columns were found.")
 
-
 labels = df['Label'].astype(int).to_numpy(dtype=np.int64)
 unique_labels = np.unique(labels)
 if len(unique_labels) != 2 or set(unique_labels.tolist()) != {0, 1}:
     raise RuntimeError(
-        f"This code expects binary CTU13 labels 0/1; actual labels: {unique_labels.tolist()}."
+        f"This code expects binary CTU13 labels 0/1, but found {unique_labels.tolist()}."
     )
 
 label_to_id = {'Normal': 0, 'Botnet': 1}
 id_to_label = {0: 'Normal', 1: 'Botnet'}
 
-
 feat_df = df[feature_cols].apply(pd.to_numeric, errors='coerce')
 
 N_total = len(df)
 all_idx = np.arange(N_total)
-
-train_idx, holdout_idx = train_test_split(
+train_idx, test_idx = train_test_split(
     all_idx,
-    test_size=VALIDATION_RATIO + TEST_RATIO,
+    test_size=TEST_RATIO,
     stratify=labels,
     random_state=SEED,
     shuffle=True,
 )
 
-val_idx, test_idx = train_test_split(
-    holdout_idx,
-    test_size=TEST_RATIO / (VALIDATION_RATIO + TEST_RATIO),
-    stratify=labels[holdout_idx],
-    random_state=SEED,
-    shuffle=True,
-)
-
-
 medians = feat_df.iloc[train_idx].median(numeric_only=True)
 feat_df = feat_df.fillna(medians).fillna(0.0)
-
 
 scaler = StandardScaler(with_mean=True, with_std=True)
 features = np.empty_like(feat_df.values, dtype=np.float64)
 features[train_idx] = scaler.fit_transform(feat_df.iloc[train_idx].values.astype(float))
 features[test_idx] = scaler.transform(feat_df.iloc[test_idx].values.astype(float))
-features[val_idx] = scaler.transform(feat_df.iloc[val_idx].values.astype(float))
 
 N = len(features)
 is_train = np.zeros(N, dtype=bool)
 is_train[train_idx] = True
-is_test = np.zeros(N, dtype=bool)
-is_test[test_idx] = True
-is_val = np.zeros(N, dtype=bool)
-is_val[val_idx] = True
-print(
-    f"Data split: train={len(train_idx)} ({TRAIN_RATIO:.0%}), "
-    f"validation={len(val_idx)} ({VALIDATION_RATIO:.0%}), "
-    f"test={len(test_idx)} ({TEST_RATIO:.0%})"
-)
+is_test = ~is_train
 
 train_unique_ids = np.unique(labels[train_idx])
 NUM_CLASSES = len(train_unique_ids)
@@ -267,6 +118,7 @@ if NUM_CLASSES != 2:
 print("CTU13 label mapping:", id_to_label)
 print(f"Samples: total={N_total}, train={len(train_idx)}, test={len(test_idx)}")
 print(f"Features: {len(feature_cols)}")
+
 
 def _safe_row_corrcoef(x_np: np.ndarray) -> np.ndarray:
     if x_np.shape[0] == 0:
@@ -288,7 +140,6 @@ def build_train_graph(x_train_np: np.ndarray):
     np.fill_diagonal(adj, False)
 
     src, dst = np.where(adj)
-
 
     self_nodes = np.arange(n, dtype=np.int64)
     src = np.concatenate([src.astype(np.int64), self_nodes])
@@ -316,7 +167,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
     src_list = []
     dst_list = []
 
-
     if n_train > 0:
         corr_tt = corr[:n_train, :n_train]
         adj_tt = (np.abs(corr_tt) >= CORR_THRESHOLD)
@@ -325,13 +175,11 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
         src_list.append(src_tt.astype(np.int64))
         dst_list.append(dst_tt.astype(np.int64))
 
-
         corr_train_test = corr[:n_train, n_train:]
         train_src, test_col = np.where(np.abs(corr_train_test) >= CORR_THRESHOLD)
         if train_src.size > 0:
             src_list.append(train_src.astype(np.int64))
             dst_list.append((n_train + test_col).astype(np.int64))
-
 
     self_nodes = np.arange(n_total, dtype=np.int64)
     src_list.append(self_nodes)
@@ -347,7 +195,6 @@ def build_inductive_eval_graph(x_train_np: np.ndarray, x_test_np: np.ndarray):
     )
     x_eval_tensor = torch.tensor(x_eval_np, dtype=torch.float, device=DEVICE)
     return x_eval_tensor, edge_index
-
 
 
 class WeightedGATClassifier(nn.Module):
@@ -375,14 +222,12 @@ class WeightedGATClassifier(nn.Module):
         )
         x1 = F.elu(x1)
 
-
         edge_weight = att_heads.mean(dim=1)
         self.cached_att = (ei_used, att_heads)
 
         x2 = self.gcn2(x1, ei_used, edge_weight=edge_weight)
         logits = self.classifier(x2)
         return logits, x2
-
 
 
 features_window = deque(maxlen=WINDOW_SIZE)
@@ -392,7 +237,6 @@ index_window = deque(maxlen=WINDOW_SIZE)
 model = None
 optimizer = None
 criterion = None
-
 
 if NUM_CLASSES == 2:
     train_labels_only = labels[train_idx]
@@ -407,16 +251,33 @@ y_pred_test = []
 y_prob_test_all = []
 hidden_test = []
 
+window_metrics = []
+
+window_conflict_stats = []
+
+graph_build_times = []
+initial_training_times = []
+incremental_update_times = []
+inference_total_time = 0.0
+inference_samples = 0
+
 global_idx = 0
+stream_window_id = 0
 
 irgd_steps = 0
 irgd_conflicts = 0
 irgd_cosines = []
 
+
+def sync_device():
+    if DEVICE.type == 'cuda':
+        torch.cuda.synchronize()
+
+
 def select_training_indices(
-    n_nodes,
-    new_train_mask_local,
-    first_window=False,
+        n_nodes,
+        new_train_mask_local,
+        first_window=False,
 ):
     if n_nodes == 0:
         return None
@@ -428,30 +289,25 @@ def select_training_indices(
     if new_idx.numel() == 0:
         return None
 
-    used_parts = [new_idx]
+    # Ablation: remove replay buffer
+    # Only newly arrived samples are used for incremental updates.
+    return new_idx
 
-    if USE_REPLAY:
-        old_mask_local = ~new_train_mask_local
-        old_idx = torch.where(old_mask_local)[0]
-        if old_idx.numel() > 0:
-            k = max(1, int(REPLAY_RATIO * old_idx.numel()))
-            k = min(k, old_idx.numel())
-            perm = torch.randperm(old_idx.numel(), device=DEVICE)[:k]
-            used_parts.append(old_idx[perm])
-
-    return torch.cat(used_parts, dim=0)
 
 def build_self_only_graph(n_nodes):
     nodes = torch.arange(n_nodes, dtype=torch.long, device=DEVICE)
     return torch.stack([nodes, nodes], dim=0)
+
 
 def _loss_on_used_nodes(logits, y_train_local, used_idx):
     if used_idx is None or used_idx.numel() == 0:
         return None
     return criterion(logits[used_idx], y_train_local[used_idx])
 
+
 def _zeros_like_param(param):
     return torch.zeros_like(param, memory_format=torch.preserve_format)
+
 
 def _materialize_grads(grads, params):
     out = []
@@ -459,20 +315,20 @@ def _materialize_grads(grads, params):
         out.append(_zeros_like_param(p) if g is None else g)
     return out
 
+
 def apply_irgd_step(
-    model,
-    optimizer,
-    x_train_tensor,
-    y_train_tensor,
-    train_edge_index,
-    self_edge_index,
-    used_idx,
+        model,
+        optimizer,
+        x_train_tensor,
+        y_train_tensor,
+        train_edge_index,
+        self_edge_index,
+        used_idx,
 ):
     params = [p for p in model.parameters() if p.requires_grad]
     encoder_param_ids = {
         id(p) for p in list(model.gat1.parameters()) + list(model.gcn2.parameters())
     }
-
 
     logits_full, _ = model(x_train_tensor, train_edge_index)
     ce_full = _loss_on_used_nodes(logits_full, y_train_tensor, used_idx)
@@ -503,11 +359,8 @@ def apply_irgd_step(
     )
     grads_graph = _materialize_grads(grads_graph_raw, params)
 
-
     logits_self, _ = model(x_train_tensor, self_edge_index)
     ce_self = _loss_on_used_nodes(logits_self, y_train_tensor, used_idx)
-
-
 
     grads_self_raw = torch.autograd.grad(
         ce_self,
@@ -517,7 +370,6 @@ def apply_irgd_step(
         allow_unused=True,
     )
     grads_self = _materialize_grads(grads_self_raw, params)
-
 
     dot = torch.zeros((), device=DEVICE)
     self_norm_sq = torch.zeros((), device=DEVICE)
@@ -534,14 +386,12 @@ def apply_irgd_step(
 
     conflict = bool(dot.detach().item() < 0.0)
 
-
     denom = torch.sqrt(self_norm_sq.clamp_min(IRGD_EPS)) * torch.sqrt(
         rel_norm_sq.clamp_min(IRGD_EPS)
     )
     cosine = (dot / denom.clamp_min(IRGD_EPS)).detach().item()
 
     if conflict:
-
 
         coeff = dot / self_norm_sq.clamp_min(IRGD_EPS)
     else:
@@ -576,12 +426,13 @@ def apply_irgd_step(
         'cosine': float(cosine),
     }
 
+
 def attention_heads_node_mean_from_cached_incoming(
-    ei_used,
-    att_heads,
-    num_nodes,
-    heads,
-    reference_nodes=None,
+        ei_used,
+        att_heads,
+        num_nodes,
+        heads,
+        reference_nodes=None,
 ):
     dst = ei_used[1]
     E = dst.numel()
@@ -610,12 +461,12 @@ def attention_heads_node_mean_from_cached_incoming(
 
 
 def sparse_entropy_loss_sum_heads(
-    ei_used,
-    att_heads,
-    num_nodes,
-    heads,
-    nodes_mask=None,
-    eps=1e-12,
+        ei_used,
+        att_heads,
+        num_nodes,
+        heads,
+        nodes_mask=None,
+        eps=1e-12,
 ):
     dst = ei_used[1]
     E = dst.numel()
@@ -651,11 +502,11 @@ def sparse_entropy_loss_sum_heads(
 
     return norm_entropy.mean()
 
+
 for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     batch_feats = features[start:start + BATCH_SIZE]
     batch_labels = labels[start:start + BATCH_SIZE]
     bsz = len(batch_feats)
-
 
     for i in range(bsz):
         features_window.append(batch_feats[i])
@@ -668,12 +519,13 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
 
     first_window = (model is None)
 
+    window_irgd_steps = 0
+    window_irgd_conflicts = 0
+    window_irgd_cosines = []
 
     x_win_np = np.asarray(features_window, dtype=np.float64)
     y_win_np = np.asarray(labels_window, dtype=np.int64)
     idx_win_np = np.asarray(index_window, dtype=np.int64)
-
-
 
     new_mask_full = np.zeros(WINDOW_SIZE, dtype=bool)
     if first_window:
@@ -684,10 +536,8 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     train_mask_full = is_train[idx_win_np]
     test_mask_full = is_test[idx_win_np]
 
-
     x_train_np = x_win_np[train_mask_full]
     y_train_np = y_win_np[train_mask_full]
-
 
     new_train_mask_local_np = new_mask_full[train_mask_full]
 
@@ -702,7 +552,11 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         device=DEVICE,
     )
 
+    sync_device()
+    graph_start_time = time.perf_counter()
     train_edge_index = build_train_graph(x_train_np)
+    sync_device()
+    graph_build_times.append(time.perf_counter() - graph_start_time)
 
     if model is None:
         model = WeightedGATClassifier(
@@ -732,13 +586,13 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
     else:
         epochs_now = GAT_EPOCHS_INC
 
-
     self_edge_index = build_self_only_graph(x_train_tensor.size(0))
 
+    sync_device()
+    update_start_time = time.perf_counter()
 
     for _ in range(epochs_now):
         model.train()
-
 
         used_idx = select_training_indices(
             x_train_tensor.size(0),
@@ -764,6 +618,10 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
                 irgd_steps += 1
                 irgd_conflicts += int(stats['conflict'])
                 irgd_cosines.append(stats['cosine'])
+
+                window_irgd_steps += 1
+                window_irgd_conflicts += int(stats['conflict'])
+                window_irgd_cosines.append(stats['cosine'])
         else:
 
             logits_train, _hidden_train = model(x_train_tensor, train_edge_index)
@@ -795,6 +653,13 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), IRGD_GRAD_CLIP)
             optimizer.step()
 
+    sync_device()
+    update_elapsed = time.perf_counter() - update_start_time
+    if first_window:
+        initial_training_times.append(update_elapsed)
+    else:
+        incremental_update_times.append(update_elapsed)
+
     if first_window:
         eval_test_mask_full = test_mask_full
     else:
@@ -804,14 +669,15 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
         x_new_test_np = x_win_np[eval_test_mask_full]
         y_new_test_np = y_win_np[eval_test_mask_full]
 
-
-
         x_eval_tensor, eval_edge_index = build_inductive_eval_graph(
             x_train_np,
             x_new_test_np,
         )
 
         model.eval()
+        sync_device()
+        inference_start_time = time.perf_counter()
+
         with torch.no_grad():
             logits_eval, hidden8_eval = model(x_eval_tensor, eval_edge_index)
             probs_eval = torch.softmax(logits_eval, dim=1)
@@ -833,13 +699,99 @@ for start in tqdm(range(0, N, BATCH_SIZE), desc='Processing batches'):
             probs_test = probs_eval[test_slice]
             mixed12_test = mixed12_eval[test_slice]
 
-            y_true_test.extend(y_new_test_np.tolist())
-            y_pred_test.extend(
-                torch.argmax(logits_test, dim=1).cpu().numpy().tolist()
-            )
-            y_prob_test_all.append(probs_test.cpu().numpy())
-            hidden_test.extend(mixed12_test.cpu().numpy().tolist())
+            window_pred = torch.argmax(logits_test, dim=1).cpu().numpy()
 
+        sync_device()
+        inference_total_time += time.perf_counter() - inference_start_time
+        inference_samples += len(x_new_test_np)
+
+        y_true_test.extend(y_new_test_np.tolist())
+        y_pred_test.extend(window_pred.tolist())
+        y_prob_test_all.append(probs_test.cpu().numpy())
+        hidden_test.extend(mixed12_test.cpu().numpy().tolist())
+
+    if ENABLE_WINDOW_ANALYSIS and test_mask_full.any():
+        x_window_test_np = x_win_np[test_mask_full]
+        y_window_test_np = y_win_np[test_mask_full]
+
+        x_window_eval_tensor, window_eval_edge_index = build_inductive_eval_graph(
+            x_train_np,
+            x_window_test_np,
+        )
+
+        model.eval()
+        with torch.no_grad():
+            window_logits_eval, _ = model(
+                x_window_eval_tensor,
+                window_eval_edge_index,
+            )
+
+            n_train_ctx = x_train_np.shape[0]
+            window_logits_test = window_logits_eval[
+                n_train_ctx:n_train_ctx + len(x_window_test_np)
+            ]
+
+            window_pred_full = torch.argmax(
+                window_logits_test,
+                dim=1,
+            ).cpu().numpy()
+
+        window_metrics.append({
+            'window': stream_window_id,
+            'stream_start': int(idx_win_np[0]),
+            'stream_end': int(idx_win_np[-1]),
+            'n_test': int(len(y_window_test_np)),
+            'accuracy': float(
+                accuracy_score(
+                    y_window_test_np,
+                    window_pred_full,
+                )
+            ),
+            'precision': float(
+                precision_score(
+                    y_window_test_np,
+                    window_pred_full,
+                    average=WINDOW_METRIC_AVERAGE,
+                    zero_division=0,
+                )
+            ),
+            'recall': float(
+                recall_score(
+                    y_window_test_np,
+                    window_pred_full,
+                    average=WINDOW_METRIC_AVERAGE,
+                    zero_division=0,
+                )
+            ),
+            'f1': float(
+                f1_score(
+                    y_window_test_np,
+                    window_pred_full,
+                    average=WINDOW_METRIC_AVERAGE,
+                    zero_division=0,
+                )
+            ),
+        })
+
+    if ENABLE_WINDOW_ANALYSIS:
+        if window_irgd_steps > 0:
+            conflict_ratio = window_irgd_conflicts / window_irgd_steps
+            mean_window_cos = float(np.mean(window_irgd_cosines))
+        else:
+            conflict_ratio = np.nan
+            mean_window_cos = np.nan
+
+        window_conflict_stats.append({
+            'window': stream_window_id,
+            'stream_start': int(idx_win_np[0]),
+            'stream_end': int(idx_win_np[-1]),
+            'rgc_updates': int(window_irgd_steps),
+            'conflict_updates': int(window_irgd_conflicts),
+            'conflict_ratio': float(conflict_ratio) if np.isfinite(conflict_ratio) else np.nan,
+            'mean_cosine': float(mean_window_cos) if np.isfinite(mean_window_cos) else np.nan,
+        })
+
+    stream_window_id += 1
     model.cached_att = None
 
 if IRGD_ENABLED:
@@ -860,12 +812,45 @@ if len(y_prob_test_all) > 0:
 else:
     y_prob_test_all = np.empty((0, NUM_CLASSES), dtype=np.float64)
 
-print("\n=== Evaluation on Random Test Split (15%) ===")
+print("\n=== Computational Cost Analysis ===")
+if len(graph_build_times) > 0:
+    print(
+        f"Average graph construction time/window: "
+        f"{np.mean(graph_build_times) * 1000.0:.2f} ms"
+    )
+else:
+    print("Average graph construction time/window: N/A")
+
+if len(initial_training_times) > 0:
+    print(
+        f"Initial-window training time: "
+        f"{np.mean(initial_training_times) * 1000.0:.2f} ms"
+    )
+else:
+    print("Initial-window training time: N/A")
+
+if len(incremental_update_times) > 0:
+    print(
+        f"Average incremental update time/window: "
+        f"{np.mean(incremental_update_times) * 1000.0:.2f} ms"
+    )
+else:
+    print("Average incremental update time/window: N/A")
+
+if inference_samples > 0:
+    print(
+        f"Average inference time/sample: "
+        f"{inference_total_time / inference_samples * 1000.0:.4f} ms"
+    )
+else:
+    print("Average inference time/sample: N/A")
+
+print("\n=== Evaluation on Random Hold-out (30%) ===")
 print(f"Expected hold-out samples: {len(test_idx)}")
 print(f"Actually evaluated samples: {len(y_true_test)}")
 
 if len(y_true_test) == 0:
-    print("The test set is empty. Check the split or window settings.")
+    print("The test set is empty. Check the data split or window settings.")
 else:
     unique_ids = np.arange(NUM_CLASSES)
     target_names = [id_to_label[i] for i in unique_ids]
@@ -898,23 +883,6 @@ else:
             f"f1-score: {m['f1-score'] * 100:.2f}%"
         )
 
-
-    sweep_metrics = {
-        "CORR_THRESHOLD": float(CORR_THRESHOLD),
-        "Accuracy": float(report["accuracy"] * 100.0),
-        "Macro Precision": float(report["macro avg"]["precision"] * 100.0),
-        "Macro Recall": float(report["macro avg"]["recall"] * 100.0),
-        "Macro F1-score": float(report["macro avg"]["f1-score"] * 100.0),
-    }
-
-    print(
-        "__CORR_SWEEP_RESULT__="
-        + json.dumps(sweep_metrics, ensure_ascii=False)
-    )
-
-    if SWEEP_CHILD:
-        sys.exit(0)
-
     try:
         labels_order = unique_ids.tolist()
         display_names = [id_to_label[i] for i in labels_order]
@@ -928,21 +896,28 @@ else:
             display_labels=display_names,
         )
 
-
         fig_cm, ax_cm = plt.subplots(figsize=(5.6, 5.0))
         disp.plot(values_format='d', cmap='Blues', colorbar=False, ax=ax_cm)
         ax_cm.set_xlabel('Predicted label')
         ax_cm.set_ylabel('True label')
+
+        plt.setp(
+            ax_cm.get_xticklabels(),
+            rotation=45,
+            ha='right',
+            rotation_mode='anchor'
+        )
+
         fig_cm.tight_layout()
         plt.show()
         plt.close(fig_cm)
     except Exception as e:
-        print("Error plotting the confusion matrix:", e)
+        print("Error while plotting the confusion matrix:", e)
 
     try:
         if NUM_CLASSES > 2:
             if y_prob_test_all.shape[0] == 0:
-                print("[ROC] No test probabilities were collected; skipping the plot.")
+                print("[ROC] No test probabilities were collected. Skipping ROC plotting.")
             else:
                 classes_sorted = unique_ids.tolist()
                 y_true_bin = label_binarize(
@@ -977,11 +952,123 @@ else:
                     plt.tight_layout()
                     plt.show()
                 else:
-                    print("[ROC] Every class lacks positive or negative samples in the test set, so multiclass ROC curves cannot be plotted.")
+                    print(
+                        "[ROC] No class has both positive and negative test samples. Multiclass ROC cannot be plotted.")
         else:
-            print("[ROC] The current task is binary; skipping multiclass ROC curves.")
+            print("[ROC] Binary classification detected. Skipping multiclass ROC.")
     except Exception as e:
-        print("Error computing or plotting ROC curves:", e)
+        print("Error while computing or plotting ROC:", e)
+
+if ENABLE_WINDOW_ANALYSIS:
+    if len(window_metrics) > 0:
+        window_df = pd.DataFrame(window_metrics)
+        window_df = window_df.sort_values('window').reset_index(drop=True)
+
+        print("\n=== Window-level Performance ===")
+        print(f"Evaluated windows: {len(window_df)}")
+        print(f"Mean test samples/window: {window_df['n_test'].mean():.2f}")
+        print(f"Mean window Accuracy: {window_df['accuracy'].mean() * 100:.2f}%")
+        print(
+            f"Mean window F1 ({WINDOW_METRIC_AVERAGE}): "
+            f"{window_df['f1'].mean() * 100:.2f}%"
+        )
+
+        fig_wp, ax_wp = plt.subplots(figsize=(7.2, 4.6))
+        ax_wp.plot(
+            window_df['window'],
+            window_df['accuracy'] * 100.0,
+            linewidth=1.5,
+            label='Accuracy',
+        )
+        ax_wp.plot(
+            window_df['window'],
+            window_df['f1'] * 100.0,
+            linewidth=1.5,
+            label='F1-score',
+        )
+        ax_wp.set_xlabel('Window Index')
+        ax_wp.set_ylabel('Performance (%)')
+        ax_wp.set_title('Window-level Performance during Incremental Learning')
+        ax_wp.set_ylim(0.0, 101.0)
+        ax_wp.grid(True, alpha=0.3)
+        ax_wp.legend()
+        fig_wp.tight_layout()
+        plt.show()
+        plt.close(fig_wp)
+    else:
+        print("\n[Window Analysis] No window-level test samples were available.")
+
+    if len(window_conflict_stats) > 0:
+        conflict_df = pd.DataFrame(window_conflict_stats)
+        valid_conflict_df = (
+            conflict_df
+            .dropna(subset=['conflict_ratio'])
+            .sort_values('window')
+            .reset_index(drop=True)
+        )
+
+        print("\n=== Window-level RGC Conflict Diagnostics ===")
+        print(f"Total full windows: {len(conflict_df)}")
+        print(f"Windows with RGC updates: {len(valid_conflict_df)}")
+
+        if len(valid_conflict_df) > 0:
+            total_updates = int(valid_conflict_df['rgc_updates'].sum())
+            total_conflicts = int(valid_conflict_df['conflict_updates'].sum())
+            overall_conflict_ratio = (
+                total_conflicts / total_updates if total_updates > 0 else 0.0
+            )
+
+            print(f"RGC update steps in plotted windows: {total_updates}")
+            print(f"Conflict update steps: {total_conflicts}")
+            print(f"Overall conflict ratio: {overall_conflict_ratio * 100:.2f}%")
+
+            valid_conflict_df['rolling_conflicts'] = (
+                valid_conflict_df['conflict_updates']
+                .rolling(
+                    window=RGC_ROLLING_WINDOWS,
+                    min_periods=1,
+                )
+                .sum()
+            )
+
+            valid_conflict_df['rolling_updates'] = (
+                valid_conflict_df['rgc_updates']
+                .rolling(
+                    window=RGC_ROLLING_WINDOWS,
+                    min_periods=1,
+                )
+                .sum()
+            )
+
+            valid_conflict_df['rolling_conflict_ratio'] = (
+                valid_conflict_df['rolling_conflicts']
+                / valid_conflict_df['rolling_updates'].clip(lower=1)
+            )
+
+            fig_cr, ax_cr = plt.subplots(figsize=(7.2, 4.6))
+            ax_cr.plot(
+                valid_conflict_df['window'],
+                valid_conflict_df['rolling_conflict_ratio'] * 100.0,
+                linewidth=1.7,
+                label=f'{RGC_ROLLING_WINDOWS}-Window Rolling Ratio',
+            )
+            ax_cr.axhline(
+                overall_conflict_ratio * 100.0,
+                linestyle='--',
+                linewidth=1.2,
+                label='Overall Ratio',
+            )
+            ax_cr.set_xlabel('Window Index')
+            ax_cr.set_ylabel('RGC Conflict Ratio (%)')
+            ax_cr.set_title('RGC Gradient Conflict Ratio over Streaming Windows')
+            ax_cr.set_ylim(0.0, 101.0)
+            ax_cr.grid(True, alpha=0.3)
+            ax_cr.legend()
+            fig_cr.tight_layout()
+            plt.show()
+            plt.close(fig_cr)
+        else:
+            print("[RGC Conflict] No RGC-enabled window was recorded.")
 
 TSNE_MAX_PER_CLASS = 1000
 
@@ -993,7 +1080,6 @@ try:
         print("\n=== t-SNE Diagnostics ===")
         print(f"Raw embedding shape: {hidden_test_np.shape}")
 
-
         finite_mask = np.isfinite(hidden_test_np).all(axis=1)
         if not finite_mask.all():
             bad = int((~finite_mask).sum())
@@ -1002,13 +1088,14 @@ try:
             labels_tsne = labels_tsne[finite_mask]
 
         if len(hidden_test_np) <= 10:
-            print("t-SNE: Too few valid test hidden vectors; skipping visualization.")
+            print("t-SNE: Too few valid test embeddings. Skipping visualization.")
         else:
 
             dim_std = hidden_test_np.std(axis=0)
             useful_dims = dim_std > 1e-10
             if useful_dims.sum() < 2:
-                print("t-SNE: The embedding has fewer than two varying dimensions and cannot be visualized reliably.")
+                print(
+                    "t-SNE: Fewer than two informative embedding dimensions remain. Reliable visualization is not possible.")
             else:
                 if useful_dims.sum() != hidden_test_np.shape[1]:
                     removed = hidden_test_np.shape[1] - int(useful_dims.sum())
@@ -1059,7 +1146,6 @@ try:
                     f"y=[{emb_2d[:, 1].min():.3f}, {emb_2d[:, 1].max():.3f}]"
                 )
 
-
                 fig_tsne, ax_tsne = plt.subplots(figsize=(7.0, 6.0))
                 for cls_id in np.unique(labels_plot):
                     mask = labels_plot == cls_id
@@ -1079,6 +1165,7 @@ try:
                 plt.show()
                 plt.close(fig_tsne)
     else:
-        print("t-SNE: Too few test hidden vectors; skipping visualization.")
+        print("t-SNE: Too few test embeddings. Skipping visualization.")
 except Exception as e:
     print("t-SNE visualization failed:", e)
+
